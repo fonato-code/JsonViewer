@@ -75,6 +75,16 @@
           <div class="surface-head px-3 py-2 d-flex align-items-center justify-content-between flex-wrap gap-2 flex-shrink-0">
             <span>Visualizador</span>
             <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+              <template v-if="rootData !== null && !showTableView">
+                <button type="button" class="btn btn-sm btn-outline-secondary" @click="expandAllTree"
+                  title="Expandir todos os nos abaixo deste nivel">
+                  <i class="far fa-expand me-1"></i> Expandir tudo
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @click="collapseAllTree"
+                  title="Recolher todos os nos abaixo deste nivel">
+                  <i class="far fa-compress me-1"></i> Minimizar tudo
+                </button>
+              </template>
               <input type="checkbox" class="btn-check" id="viewTableToggle" v-model="tableViewEnabled"
                 autocomplete="off"
                 title="Preferencia global: em niveis que forem array, usa tabela quando ligado; em objetos, mostra arvore ate voltar a um array">

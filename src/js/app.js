@@ -322,6 +322,43 @@
           this.expandedState[JSON.stringify(partial)] = true;
         });
       },
+      expandAllTree() {
+        const root = this.currentNode;
+        if (root === null || typeof root !== "object") {
+          return;
+        }
+        const base = this.selectedPath.slice();
+        const next = Object.assign({}, this.expandedState);
+        next[JSON.stringify(base)] = true;
+        const walk = function (value, pathArr, state) {
+          if (value === null || typeof value !== "object") {
+            return;
+          }
+          if (Array.isArray(value)) {
+            for (let i = 0; i < value.length; i++) {
+              const p = pathArr.concat(String(i));
+              state[JSON.stringify(p)] = true;
+              walk(value[i], p, state);
+            }
+          } else {
+            const keys = Object.keys(value);
+            for (let j = 0; j < keys.length; j++) {
+              const k = keys[j];
+              const p = pathArr.concat(k);
+              state[JSON.stringify(p)] = true;
+              walk(value[k], p, state);
+            }
+          }
+        };
+        walk(root, base, next);
+        this.expandedState = next;
+      },
+      collapseAllTree() {
+        const base = this.selectedPath.slice();
+        const next = {};
+        next[JSON.stringify(base)] = true;
+        this.expandedState = next;
+      },
       collapseInputPanel() {
         this.inputPanelCollapsed = true;
       },

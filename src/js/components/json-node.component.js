@@ -57,10 +57,10 @@
     template: `
       <div class="tree-node">
         <div class="tree-line" :class="{active: isActive(path)}" @click="emitSelect(path)">
-          <span v-if="isContainer" @click.stop="emitToggle(path)" class="text-secondary">
+          <span v-if="isContainer" @click.stop="emitToggle(path)" class="tree-node-toggle text-secondary">
             <i :class="isExpanded(path) ? 'far fa-chevron-down' : 'far fa-chevron-right'"></i>
           </span>
-          <span v-else class="text-secondary"><i class="far fa-circle fa-xs"></i></span>
+          <span v-else class="tree-node-toggle text-secondary"><i class="far fa-circle fa-xs"></i></span>
           <span class="key">{{ nodeKey }}</span>
           <span class="text-secondary">:</span>
           <span :class="valueClass(node)">{{ valuePreview(node) }}</span>

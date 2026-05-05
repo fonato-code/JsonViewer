@@ -382,6 +382,24 @@ body.theme-light .sidebar-edge-tab {
   user-select: none;
 }
 
+/* Icone de expandir / bullet: mais espaco ate a chave e alvo de clique maior */
+.tree-node-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 2.125rem;
+  min-height: 1.75rem;
+  margin-right: 0.55rem;
+  padding: 0.25rem 0.4rem;
+  box-sizing: border-box;
+  border-radius: 6px;
+}
+
+.tree-line .tree-node-toggle:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 .tree-line:hover {
   background: var(--accent-soft);
 }
