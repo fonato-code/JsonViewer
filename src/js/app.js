@@ -17,7 +17,8 @@
         tablePage: 1,
         tableSearch: "",
         tableSortColumn: null,
-        tableSortDir: "asc"
+        tableSortDir: "asc",
+        tableColumnWidths: {}
       };
     },
     computed: {
@@ -176,6 +177,19 @@
           return "col min-w-0";
         }
         return "col-lg-7";
+      },
+      needsTableColumnWidthInit() {
+        if (!this.showTableView || !this.tableColumnKeys.length) {
+          return false;
+        }
+        const keys = this.tableColumnKeys;
+        const w = this.tableColumnWidths;
+        for (let i = 0; i < keys.length; i++) {
+          if (w[keys[i]] == null) {
+            return true;
+          }
+        }
+        return Object.keys(w).length !== keys.length;
       }
     },
     watch: {
@@ -187,10 +201,24 @@
       },
       selectedPath: function () {
         this.tablePage = 1;
+        this.tableColumnWidths = {};
         const self = this;
         this.$nextTick(function () {
           if (!Array.isArray(self.currentNode)) {
             self.tableViewEnabled = false;
+          } else if (self.showTableView) {
+            self.initTableColumnWidthsFromContent();
+          }
+        });
+      },
+      tableViewEnabled: function (v) {
+        if (!v) {
+          return;
+        }
+        const self = this;
+        this.$nextTick(function () {
+          if (self.needsTableColumnWidthInit) {
+            self.initTableColumnWidthsFromContent();
           }
         });
       }
@@ -214,6 +242,13 @@
           this.selectedPath = [];
           this.expandedState = { "[]": true };
           this.inputPanelCollapsed = true;
+          this.tableColumnWidths = {};
+          const self = this;
+          this.$nextTick(function () {
+            if (self.showTableView && self.canUseTableView) {
+              self.initTableColumnWidthsFromContent();
+            }
+          });
         } catch (error) {
           this.rootData = null;
           this.jsonError = "JSON invalido: " + error.message;
@@ -231,6 +266,7 @@
         this.tableSearch = "";
         this.tableSortColumn = null;
         this.tableSortDir = "asc";
+        this.tableColumnWidths = {};
       },
       loadSample() {
         this.jsonText = JSON.stringify(
@@ -419,10 +455,93 @@
         if (this.tablePage < this.tableTotalPages) {
           this.tablePage += 1;
         }
+      },
+      tableColPixelWidth(col) {
+        const w = this.tableColumnWidths[col];
+        if (w != null) {
+          return w;
+        }
+        return 140;
+      },
+      measurePlainTextWidth(text) {
+        let el = this._tableMeasureEl;
+        if (!el) {
+          el = document.createElement("span");
+          el.className = "json-data-table-measure";
+          el.setAttribute("aria-hidden", "true");
+          document.body.appendChild(el);
+          this._tableMeasureEl = el;
+        }
+        el.textContent = text == null ? "" : String(text);
+        return el.getBoundingClientRect().width;
+      },
+      measureColumnContentWidth(col) {
+        let maxW = this.measurePlainTextWidth(this.tableHeaderLabel(col) + "  \u2195");
+        const rows = this.tableFilteredRowsMeta;
+        for (let i = 0; i < rows.length; i++) {
+          const raw = this.getCellRaw(rows[i].item, col);
+          const txt = this.formatTableCell(raw);
+          maxW = Math.max(maxW, this.measurePlainTextWidth(txt));
+        }
+        return Math.ceil(maxW);
+      },
+      initTableColumnWidthsFromContent() {
+        if (!this.showTableView || !this.tableColumnKeys.length) {
+          return;
+        }
+        const maxAutoCap = 320;
+        const pad = 52;
+        const next = {};
+        const self = this;
+        this.tableColumnKeys.forEach(function (col) {
+          const measured = self.measureColumnContentWidth(col);
+          next[col] = Math.min(Math.max(measured + pad, 72), maxAutoCap);
+        });
+        this.tableColumnWidths = next;
+      },
+      autoFitTableColumn(col) {
+        if (this.tableColumnKeys.indexOf(col) === -1) {
+          return;
+        }
+        const pad = 56;
+        const natural = Math.ceil(this.measureColumnContentWidth(col) + pad);
+        const fitMax = Math.min(Math.max(window.innerWidth - 48, 520), 2400);
+        const w = Math.min(Math.max(natural, 72), fitMax);
+        this.tableColumnWidths = Object.assign({}, this.tableColumnWidths, { [col]: w });
+      },
+      onColResizeMouseDown(e, col) {
+        const startX = e.clientX;
+        let startW = this.tableColumnWidths[col];
+        if (startW == null) {
+          startW = Math.ceil(this.measureColumnContentWidth(col) + 52);
+        }
+        const self = this;
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+        const onMove = function (ev) {
+          const w = Math.max(48, startW + (ev.clientX - startX));
+          self.tableColumnWidths = Object.assign({}, self.tableColumnWidths, { [col]: Math.round(w) });
+        };
+        const onUp = function () {
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+          window.removeEventListener("mousemove", onMove);
+          window.removeEventListener("mouseup", onUp);
+        };
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+      },
+      onColResizeDblClick(e, col) {
+        this.autoFitTableColumn(col);
       }
     },
     mounted() {
       document.body.classList.add("theme-dark");
+    },
+    beforeUnmount() {
+      if (this._tableMeasureEl && this._tableMeasureEl.parentNode) {
+        this._tableMeasureEl.parentNode.removeChild(this._tableMeasureEl);
+      }
     }
   });
 

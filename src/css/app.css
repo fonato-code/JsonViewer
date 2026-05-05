@@ -231,13 +231,9 @@ body.theme-light {
 }
 
 .table-toolbar-search {
-  flex: 1 1 14rem;
+  flex: 1 1 18rem;
   min-width: 12rem;
-  max-width: 24rem;
-}
-
-.table-toolbar-actions {
-  flex: 0 0 auto;
+  max-width: none;
 }
 
 .table-page-select {
@@ -290,6 +286,22 @@ body.theme-light {
   --bs-table-hover-bg: var(--accent-soft);
   --bs-table-active-bg: var(--accent-soft);
   color: var(--text-primary);
+  table-layout: fixed;
+  width: max-content;
+  max-width: none;
+}
+
+.json-data-table-measure {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  visibility: hidden;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 400;
+  font-family: inherit;
+  line-height: 1.5;
+  padding: 0;
 }
 
 .theme-light .json-data-table {
@@ -310,6 +322,46 @@ body.theme-light {
 .json-data-table tbody td {
   border-color: color-mix(in srgb, var(--border-color) 55%, transparent);
   font-size: 0.875rem;
+  vertical-align: middle;
+}
+
+.table-resizable-th {
+  position: relative;
+  padding-right: 0.65rem;
+  overflow: visible;
+}
+
+.col-resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 4;
+  user-select: none;
+  touch-action: none;
+}
+
+.col-resize-handle:hover {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.table-data-cell {
+  overflow: hidden;
+  max-width: 0;
+}
+
+.table-cell-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.table-actions-cell {
+  white-space: nowrap;
 }
 
 .table-col-idx {

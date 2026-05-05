@@ -144,10 +144,6 @@
                         <option :value="50">50</option>
                         <option :value="100">100</option>
                       </select>
-                      <button type="button" class="btn btn-sm btn-outline-secondary btn-icon"
-                        @click="resetTableViewFilters" title="Limpar busca e ordenacao">
-                        <i class="far fa-redo-alt"></i>
-                      </button>
                     </div>
                     <div class="table-toolbar-search flex-grow-1">
                       <div class="input-group input-group-sm table-search-group">
@@ -156,44 +152,46 @@
                           placeholder="Buscar nas linhas" autocomplete="off">
                       </div>
                     </div>
-                    <div class="d-flex gap-1 table-toolbar-actions flex-shrink-0">
-                      <button type="button" class="btn btn-sm btn-outline-secondary btn-icon" title="Grade" disabled>
-                        <i class="far fa-th"></i>
-                      </button>
-                      <button type="button" class="btn btn-sm btn-outline-secondary btn-icon" title="Mais" disabled>
-                        <i class="far fa-plus"></i>
-                      </button>
-                    </div>
                   </div>
                   <p class="table-view-hint small text-secondary mb-2">
                     Busca, ordenacao e paginacao afetam apenas a visualizacao.
+                    Arraste a borda direita do cabecalho da coluna para redimensionar; duplo clique nela ajusta a largura ao conteudo (ate o limite da janela).
                   </p>
                   <div class="table-responsive table-view-grid">
                     <table class="table table-sm table-striped table-hover json-data-table mb-0 align-middle">
+                      <colgroup>
+                        <col style="width: 3.25rem" />
+                        <col v-for="col in tableColumnKeys" :key="'cg-' + col"
+                          :style="{ width: tableColPixelWidth(col) + 'px' }" />
+                        <col style="width: 3.5rem" />
+                      </colgroup>
                       <thead>
                         <tr>
                           <th scope="col" class="table-col-idx text-secondary">#</th>
                           <th v-for="col in tableColumnKeys" :key="'th-' + col"
-                            :class="['table-sort-th', 'text-nowrap', { 'table-th-active': tableSortColumn === col }]">
+                            :class="['table-sort-th', 'table-resizable-th', { 'table-th-active': tableSortColumn === col }]">
                             <button type="button" class="btn btn-link table-th-btn p-0 text-decoration-none"
                               @click.prevent="toggleTableSort(col)">
                               <i class="far fa-bars text-secondary me-1"></i>
                               <span>{{ tableHeaderLabel(col) }}</span>
                               <i class="far fa-sort ms-1 text-secondary"></i>
                             </button>
+                            <span class="col-resize-handle" title="Arraste para redimensionar. Duplo clique para ajustar ao conteudo."
+                              @mousedown.prevent.stop="onColResizeMouseDown($event, col)"
+                              @dblclick.prevent.stop="onColResizeDblClick($event, col)"></span>
                           </th>
                           <th scope="col" class="text-end text-secondary">Acoes</th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr v-for="(rowMeta, rIdx) in tablePagedRows" :key="'row-' + rowMeta.index + '-' + rIdx">
-                          <td class="text-secondary small">{{ (tablePage - 1) * tablePageSize + rIdx + 1 }}</td>
-                          <td v-for="col in tableColumnKeys" :key="'c-' + rowMeta.index + '-' + col">
-                            <span :class="tableCellClass(getCellRaw(rowMeta.item, col))">
+                          <td class="text-secondary small table-col-idx">{{ (tablePage - 1) * tablePageSize + rIdx + 1 }}</td>
+                          <td v-for="col in tableColumnKeys" :key="'c-' + rowMeta.index + '-' + col" class="table-data-cell">
+                            <span class="table-cell-text" :class="tableCellClass(getCellRaw(rowMeta.item, col))">
                               {{ formatTableCell(getCellRaw(rowMeta.item, col)) }}
                             </span>
                           </td>
-                          <td class="text-end">
+                          <td class="text-end table-actions-cell">
                             <button type="button" class="btn btn-sm btn-link p-0 text-secondary"
                               title="Copiar linha (JSON)" @click="copyTableRow(rowMeta.item)">
                               <i class="far fa-copy"></i>
