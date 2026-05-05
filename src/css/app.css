@@ -1,0 +1,191 @@
+:root {
+  --bg-main: #f2f5fc;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #f8faff;
+  --border-color: #d8e1f1;
+  --text-primary: #1f2d4d;
+  --text-secondary: #5b6c93;
+  --accent: #2f78ff;
+  --accent-soft: rgba(47, 120, 255, 0.15);
+  --danger-soft: rgba(220, 53, 69, 0.15);
+  --shadow: 0 20px 40px rgba(11, 24, 56, 0.08);
+}
+
+body.theme-dark {
+  --bg-main: #060d1f;
+  --bg-surface: #0c152f;
+  --bg-surface-2: #0f1d3c;
+  --border-color: #1d2f5c;
+  --text-primary: #dce8ff;
+  --text-secondary: #8ea3d7;
+  --accent: #2f8bff;
+  --accent-soft: rgba(58, 149, 255, 0.2);
+  --danger-soft: rgba(255, 108, 108, 0.16);
+  --shadow: 0 20px 55px rgba(0, 0, 0, 0.45);
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(52, 119, 255, 0.2), transparent 28%),
+    radial-gradient(circle at 82% 8%, rgba(44, 198, 255, 0.12), transparent 22%),
+    linear-gradient(180deg, #071130, var(--bg-main));
+  color: var(--text-primary);
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+body.theme-light {
+  background:
+    radial-gradient(circle at 15% 0%, rgba(52, 119, 255, 0.2), transparent 30%),
+    radial-gradient(circle at 80% 8%, rgba(28, 177, 255, 0.18), transparent 25%),
+    var(--bg-main);
+}
+
+.app-shell {
+  max-width: 1320px;
+}
+
+.hero-nav {
+  background: linear-gradient(90deg, rgba(11, 28, 63, 0.82), rgba(8, 18, 43, 0.65));
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+  border-radius: 16px;
+}
+
+.theme-light .hero-nav {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.9), rgba(248, 251, 255, 0.92));
+}
+
+.hero-title {
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.surface {
+  background: linear-gradient(180deg, rgba(12, 26, 58, 0.96), rgba(10, 22, 49, 0.95));
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.theme-light .surface {
+  background: linear-gradient(180deg, #ffffff, #f6f9ff);
+}
+
+.surface-head {
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.json-input {
+  min-height: 290px;
+  font-family: Consolas, Monaco, monospace;
+  background-color: var(--bg-surface-2);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.json-input:focus {
+  color: var(--text-primary);
+  background-color: var(--bg-surface-2);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 0.2rem var(--accent-soft);
+}
+
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tree-wrap {
+  max-height: 520px;
+  overflow: auto;
+  background: color-mix(in srgb, var(--bg-surface-2) 85%, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.65rem 0.5rem;
+}
+
+.tree-node {
+  margin-left: 0.25rem;
+  border-left: 1px dashed color-mix(in srgb, var(--border-color) 78%, transparent);
+  padding-left: 0.7rem;
+}
+
+.tree-line {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.16rem 0.35rem;
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tree-line:hover {
+  background: var(--accent-soft);
+}
+
+.tree-line.active {
+  background: var(--accent-soft);
+  outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.key {
+  color: #7db8ff;
+  font-weight: 600;
+}
+
+.theme-light .key {
+  color: #0d6efd;
+}
+
+.value-string {
+  color: #2ad39f;
+}
+
+.value-number {
+  color: #f8d26f;
+}
+
+.value-bool {
+  color: #f78ca2;
+}
+
+.value-null {
+  color: #97a6c7;
+  font-style: italic;
+}
+
+.crumb-area {
+  background: color-mix(in srgb, var(--bg-surface-2) 88%, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.6rem 0.8rem;
+}
+
+.state-box {
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-surface-2) 88%, transparent);
+  color: var(--text-secondary);
+  padding: 2rem 1.2rem;
+  text-align: center;
+}
+
+.stats-card {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-surface-2) 90%, transparent);
+  padding: 0.75rem;
+}
