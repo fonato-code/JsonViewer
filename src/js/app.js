@@ -166,18 +166,6 @@
         }
         return result;
       },
-      inputColumnClass() {
-        if (this.rootData !== null && this.inputPanelCollapsed) {
-          return "col-auto input-rail-wrap";
-        }
-        return "col-lg-5";
-      },
-      viewerColumnClass() {
-        if (this.rootData !== null && this.inputPanelCollapsed) {
-          return "col min-w-0";
-        }
-        return "col-lg-7";
-      },
       needsTableColumnWidthInit() {
         if (!this.showTableView || !this.tableColumnKeys.length) {
           return false;
@@ -326,9 +314,7 @@
         });
       },
       collapseInputPanel() {
-        if (this.rootData !== null) {
-          this.inputPanelCollapsed = true;
-        }
+        this.inputPanelCollapsed = true;
       },
       expandInputPanel() {
         this.inputPanelCollapsed = false;

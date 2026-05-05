@@ -11,68 +11,68 @@
 </head>
 
 <body class="theme-dark">
-  <div id="app" class="container py-4 py-md-5 app-shell">
-    <header class="hero-nav px-3 px-md-4 py-3 mb-4">
-      <div class="d-flex align-items-center justify-content-between gap-2">
-        <div class="d-flex align-items-center gap-2">
+  <div id="app" class="app-root">
+    <nav class="navbar app-navbar navbar-dark">
+      <div class="container-fluid px-3 px-lg-4">
+        <span class="navbar-brand mb-0 app-navbar-brand d-flex align-items-center gap-2">
           <i class="fad fa-brackets-curly text-primary"></i>
-          <h1 class="h5 mb-0 hero-title">JSON Data Viewer</h1>
-        </div>
-        <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-sm btn-outline-primary btn-icon" @click="toggleTheme" :title="themeTitle">
+          JSON Data Viewer
+        </span>
+        <div class="d-flex align-items-center gap-2 ms-auto">
+          <button class="btn btn-sm btn-outline-primary btn-icon" type="button" @click="toggleTheme" :title="themeTitle">
             <i :class="themeIcon"></i>
           </button>
-          <button class="btn btn-sm btn-outline-secondary btn-icon" @click="loadSample" title="Carregar exemplo">
+          <button class="btn btn-sm btn-outline-secondary btn-icon" type="button" @click="loadSample" title="Carregar exemplo">
             <i class="far fa-flask"></i>
           </button>
         </div>
       </div>
-    </header>
+    </nav>
 
-    <main class="row g-4 align-items-stretch">
-      <section :class="inputColumnClass">
-        <article v-if="rootData === null || !inputPanelCollapsed" class="surface h-100">
-          <div class="surface-head px-3 py-2 d-flex align-items-center justify-content-between">
-            <span>Entrada JSON</span>
-            <div class="d-flex align-items-center gap-2">
-              <button v-if="rootData !== null" type="button"
-                class="btn btn-link btn-sm text-secondary text-decoration-none p-0 border-0"
-                @click="collapseInputPanel" title="Recolher painel de entrada">
-                <i class="far fa-chevron-left"></i>
-              </button>
-              <small>{{ inputStatus }}</small>
-            </div>
-          </div>
-          <div class="p-3">
-            <textarea class="form-control json-input" v-model="jsonText"
-              placeholder='Cole seu JSON aqui. Ex: {"nome":"Teste","itens":[1,2,3]}'></textarea>
-            <div class="d-flex align-items-center gap-2 mt-3">
-              <button class="btn btn-primary" @click="parseJson">
-                <i class="far fa-play me-1"></i> Processar JSON
-              </button>
-              <button class="btn btn-outline-danger" @click="clearAll">
-                <i class="far fa-trash me-1"></i> Limpar
-              </button>
-            </div>
-            <div class="small text-danger mt-2" v-if="jsonError">
-              <i class="far fa-exclamation-circle me-1"></i>{{ jsonError }}
-            </div>
-          </div>
-        </article>
-        <article v-else class="surface input-panel-rail h-100">
-          <div class="d-flex flex-column align-items-center py-3 px-2 gap-3">
-            <button type="button" class="btn btn-sm btn-outline-primary btn-icon" @click="expandInputPanel"
-              title="Mostrar entrada JSON">
-              <i class="far fa-code"></i>
+    <aside class="input-sidebar" :class="{ 'input-sidebar--open': !inputPanelCollapsed }" aria-label="Entrada JSON">
+      <div class="input-sidebar-panel d-flex flex-column h-100">
+        <header class="input-sidebar-head px-3 py-2 d-flex align-items-center justify-content-between flex-shrink-0">
+          <span class="input-sidebar-title">Entrada JSON</span>
+          <div class="d-flex align-items-center gap-2">
+            <button type="button"
+              class="btn btn-link btn-sm input-sidebar-close text-decoration-none p-0 border-0"
+              @click="collapseInputPanel" title="Fechar painel de entrada">
+              <i class="far fa-times"></i>
             </button>
-            <span class="input-rail-label text-secondary">Entrada</span>
+            <small class="input-sidebar-status">{{ inputStatus }}</small>
           </div>
-        </article>
-      </section>
+        </header>
+        <div class="input-sidebar-body flex-grow-1 min-h-0 d-flex flex-column">
+          <textarea class="form-control json-input input-sidebar-textarea flex-grow-1 min-h-0 border-0 rounded-0"
+            v-model="jsonText"
+            placeholder='Cole seu JSON aqui. Ex: {"nome":"Teste","itens":[1,2,3]}'></textarea>
+        </div>
+        <footer class="input-sidebar-footer px-3 py-2 flex-shrink-0">
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <button class="btn btn-primary btn-sm" type="button" @click="parseJson">
+              <i class="far fa-play me-1"></i> Processar JSON
+            </button>
+            <button class="btn btn-outline-danger btn-sm" type="button" @click="clearAll">
+              <i class="far fa-trash me-1"></i> Limpar
+            </button>
+          </div>
+          <div class="small text-danger mt-2 mb-0" v-if="jsonError">
+            <i class="far fa-exclamation-circle me-1"></i>{{ jsonError }}
+          </div>
+        </footer>
+      </div>
+    </aside>
 
-      <section :class="viewerColumnClass">
-        <article class="surface">
-          <div class="surface-head px-3 py-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <button v-if="inputPanelCollapsed" type="button" class="sidebar-edge-tab" @click="expandInputPanel"
+      title="Abrir entrada JSON">
+      <i class="far fa-code"></i>
+      <span class="sidebar-edge-tab-label">Entrada</span>
+    </button>
+
+    <div class="app-workspace" :class="{ 'app-workspace--sidebar-closed': inputPanelCollapsed }">
+      <main class="viewer-main">
+        <article class="surface viewer-panel h-100 d-flex flex-column min-h-0">
+          <div class="surface-head px-3 py-2 d-flex align-items-center justify-content-between flex-wrap gap-2 flex-shrink-0">
             <span>Visualizador</span>
             <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
               <input type="checkbox" class="btn-check" id="viewTableToggle" v-model="tableViewEnabled"
@@ -85,9 +85,9 @@
               <small class="text-secondary">{{ viewerLevelSummary }}</small>
             </div>
           </div>
-          <div class="p-3">
-            <div v-if="rootData !== null">
-              <div class="crumb-area mb-3 d-flex align-items-center justify-content-between gap-2">
+          <div class="viewer-content flex-grow-1 min-h-0 p-3 d-flex flex-column">
+            <div v-if="rootData !== null" class="d-flex flex-column flex-grow-1 min-h-0">
+              <div class="crumb-area mb-3 d-flex align-items-center justify-content-between gap-2 flex-shrink-0">
                 <nav aria-label="breadcrumb">
                   <ol class="breadcrumb mb-0">
                     <li class="breadcrumb-item" v-for="(part, idx) in pathParts" :key="'crumb-' + idx + '-' + JSON.stringify(part.path)">
@@ -97,13 +97,13 @@
                     </li>
                   </ol>
                 </nav>
-                <button class="btn btn-sm btn-outline-secondary" @click="navigateToParent"
+                <button class="btn btn-sm btn-outline-secondary" type="button" @click="navigateToParent"
                   :disabled="selectedPath.length === 0">
                   <i class="far fa-level-up-alt me-1"></i> Subir
                 </button>
               </div>
 
-              <div class="row g-3 mb-3">
+              <div class="row g-3 mb-3 flex-shrink-0">
                 <div class="col-6 col-md-3">
                   <div class="stats-card">
                     <div class="small text-secondary">Tipo</div>
@@ -130,12 +130,12 @@
                 </div>
               </div>
 
-              <div v-if="showTableView" class="table-view-wrap">
-                <div v-if="currentNode.length === 0" class="state-box py-4 mb-0">
+              <div v-if="showTableView" class="table-view-wrap flex-grow-1 min-h-0 d-flex flex-column">
+                <div v-if="currentNode.length === 0" class="state-box py-4 mb-0 flex-shrink-0">
                   Array vazio neste nivel.
                 </div>
                 <template v-else>
-                  <div class="table-view-toolbar mb-2">
+                  <div class="table-view-toolbar mb-2 flex-shrink-0">
                     <div class="d-flex flex-wrap align-items-center gap-2 table-toolbar-left">
                       <label class="small text-secondary mb-0 text-nowrap">Linhas por pagina</label>
                       <select v-model.number="tablePageSize" class="form-select form-select-sm table-page-select">
@@ -153,11 +153,11 @@
                       </div>
                     </div>
                   </div>
-                  <p class="table-view-hint small text-secondary mb-2">
+                  <p class="table-view-hint small text-secondary mb-2 flex-shrink-0">
                     Busca, ordenacao e paginacao afetam apenas a visualizacao.
                     Arraste a borda direita do cabecalho da coluna para redimensionar; duplo clique nela ajusta a largura ao conteudo (ate o limite da janela).
                   </p>
-                  <div class="table-responsive table-view-grid">
+                  <div class="table-view-grid flex-grow-1 min-h-0">
                     <table class="table table-sm table-striped table-hover json-data-table mb-0 align-middle">
                       <colgroup>
                         <col style="width: 3.25rem" />
@@ -201,7 +201,7 @@
                       </tbody>
                     </table>
                   </div>
-                  <div class="table-view-footer d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+                  <div class="table-view-footer d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2 flex-shrink-0">
                     <span class="small text-secondary">{{ tableRangeLabel }}</span>
                     <div class="d-flex align-items-center gap-1">
                       <button type="button" class="btn btn-sm btn-outline-secondary btn-icon" @click="tablePagePrev"
@@ -217,20 +217,20 @@
                   </div>
                 </template>
               </div>
-              <div v-else class="tree-wrap">
+              <div v-else class="tree-wrap flex-grow-1 min-h-0">
                 <json-node :node="currentNode" :node-key="currentNodeLabel" :path="selectedPath"
                   :expanded-state="expandedState" :active-path="selectedPath" @toggle="toggleExpand"
                   @select="selectPath"></json-node>
               </div>
             </div>
-            <div v-else class="state-box">
+            <div v-else class="state-box flex-shrink-0">
               <i class="far fa-diagram-project fs-2 mb-2 d-block"></i>
               Cole um JSON e clique em <strong>Processar JSON</strong> para navegar pelos niveis.
             </div>
           </div>
         </article>
-      </section>
-    </main>
+      </main>
+    </div>
   </div>
 
   <script src="src/js/vue.js"></script>
