@@ -72,9 +72,18 @@
 
       <section :class="viewerColumnClass">
         <article class="surface">
-          <div class="surface-head px-3 py-2 d-flex align-items-center justify-content-between">
+          <div class="surface-head px-3 py-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
             <span>Visualizador</span>
-            <small>{{ nodeTypeSummary }}</small>
+            <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+              <input type="checkbox" class="btn-check" id="viewTableToggle" v-model="tableViewEnabled"
+                :disabled="!canUseTableView" autocomplete="off"
+                :title="canUseTableView ? 'Visao em tabela (somente neste nivel)' : 'Disponivel quando o nivel atual for um array'">
+              <label class="btn btn-sm btn-outline-primary mb-0" for="viewTableToggle"
+                :class="{ 'table-toggle-disabled': !canUseTableView }">
+                <i class="far fa-table me-1"></i> Tabela
+              </label>
+              <small class="text-secondary">{{ viewerLevelSummary }}</small>
+            </div>
           </div>
           <div class="p-3">
             <div v-if="rootData !== null">
@@ -121,7 +130,96 @@
                 </div>
               </div>
 
-              <div class="tree-wrap">
+              <div v-if="showTableView" class="table-view-wrap">
+                <div v-if="currentNode.length === 0" class="state-box py-4 mb-0">
+                  Array vazio neste nivel.
+                </div>
+                <template v-else>
+                  <div class="table-view-toolbar mb-2">
+                    <div class="d-flex flex-wrap align-items-center gap-2 table-toolbar-left">
+                      <label class="small text-secondary mb-0 text-nowrap">Linhas por pagina</label>
+                      <select v-model.number="tablePageSize" class="form-select form-select-sm table-page-select">
+                        <option :value="10">10</option>
+                        <option :value="25">25</option>
+                        <option :value="50">50</option>
+                        <option :value="100">100</option>
+                      </select>
+                      <button type="button" class="btn btn-sm btn-outline-secondary btn-icon"
+                        @click="resetTableViewFilters" title="Limpar busca e ordenacao">
+                        <i class="far fa-redo-alt"></i>
+                      </button>
+                    </div>
+                    <div class="table-toolbar-search flex-grow-1">
+                      <div class="input-group input-group-sm table-search-group">
+                        <span class="input-group-text"><i class="far fa-search"></i></span>
+                        <input type="search" class="form-control" v-model.trim="tableSearch"
+                          placeholder="Buscar nas linhas" autocomplete="off">
+                      </div>
+                    </div>
+                    <div class="d-flex gap-1 table-toolbar-actions flex-shrink-0">
+                      <button type="button" class="btn btn-sm btn-outline-secondary btn-icon" title="Grade" disabled>
+                        <i class="far fa-th"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary btn-icon" title="Mais" disabled>
+                        <i class="far fa-plus"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <p class="table-view-hint small text-secondary mb-2">
+                    Busca, ordenacao e paginacao afetam apenas a visualizacao.
+                  </p>
+                  <div class="table-responsive table-view-grid">
+                    <table class="table table-sm table-striped table-hover json-data-table mb-0 align-middle">
+                      <thead>
+                        <tr>
+                          <th scope="col" class="table-col-idx text-secondary">#</th>
+                          <th v-for="col in tableColumnKeys" :key="'th-' + col"
+                            :class="['table-sort-th', 'text-nowrap', { 'table-th-active': tableSortColumn === col }]">
+                            <button type="button" class="btn btn-link table-th-btn p-0 text-decoration-none"
+                              @click.prevent="toggleTableSort(col)">
+                              <i class="far fa-bars text-secondary me-1"></i>
+                              <span>{{ tableHeaderLabel(col) }}</span>
+                              <i class="far fa-sort ms-1 text-secondary"></i>
+                            </button>
+                          </th>
+                          <th scope="col" class="text-end text-secondary">Acoes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(rowMeta, rIdx) in tablePagedRows" :key="'row-' + rowMeta.index + '-' + rIdx">
+                          <td class="text-secondary small">{{ (tablePage - 1) * tablePageSize + rIdx + 1 }}</td>
+                          <td v-for="col in tableColumnKeys" :key="'c-' + rowMeta.index + '-' + col">
+                            <span :class="tableCellClass(getCellRaw(rowMeta.item, col))">
+                              {{ formatTableCell(getCellRaw(rowMeta.item, col)) }}
+                            </span>
+                          </td>
+                          <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-link p-0 text-secondary"
+                              title="Copiar linha (JSON)" @click="copyTableRow(rowMeta.item)">
+                              <i class="far fa-copy"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="table-view-footer d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+                    <span class="small text-secondary">{{ tableRangeLabel }}</span>
+                    <div class="d-flex align-items-center gap-1">
+                      <button type="button" class="btn btn-sm btn-outline-secondary btn-icon" @click="tablePagePrev"
+                        :disabled="tablePage <= 1" title="Pagina anterior">
+                        <i class="far fa-chevron-left"></i>
+                      </button>
+                      <span class="small text-secondary px-2">Pagina {{ tablePage }} / {{ tableTotalPages }}</span>
+                      <button type="button" class="btn btn-sm btn-outline-secondary btn-icon" @click="tablePageNext"
+                        :disabled="tablePage >= tableTotalPages" title="Proxima pagina">
+                        <i class="far fa-chevron-right"></i>
+                      </button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+              <div v-else class="tree-wrap">
                 <json-node :node="currentNode" :node-key="currentNodeLabel" :path="selectedPath"
                   :expanded-state="expandedState" :active-path="selectedPath" @toggle="toggleExpand"
                   @select="selectPath"></json-node>

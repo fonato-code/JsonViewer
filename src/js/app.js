@@ -11,7 +11,13 @@
         rootData: null,
         selectedPath: [],
         expandedState: {},
-        inputPanelCollapsed: false
+        inputPanelCollapsed: false,
+        tableViewEnabled: false,
+        tablePageSize: 50,
+        tablePage: 1,
+        tableSearch: "",
+        tableSortColumn: null,
+        tableSortDir: "asc"
       };
     },
     computed: {
@@ -62,6 +68,83 @@
         if (this.rootData === null) return "Sem estrutura";
         return this.readableType(this.rootData);
       },
+      viewerLevelSummary() {
+        if (this.rootData === null) return "Sem estrutura";
+        const t = this.readableType(this.currentNode);
+        if (Array.isArray(this.currentNode)) {
+          return t + " (" + this.currentNode.length + ")";
+        }
+        return t;
+      },
+      canUseTableView() {
+        return this.rootData !== null && Array.isArray(this.currentNode);
+      },
+      showTableView() {
+        return this.tableViewEnabled && this.canUseTableView;
+      },
+      tableColumnKeys() {
+        if (!this.canUseTableView || this.currentNode.length === 0) return [];
+        const arr = this.currentNode;
+        const keys = new Set();
+        let anyObject = false;
+        arr.forEach(function (item) {
+          if (item && typeof item === "object" && !Array.isArray(item)) {
+            anyObject = true;
+            Object.keys(item).forEach(function (k) {
+              keys.add(k);
+            });
+          }
+        });
+        if (anyObject) {
+          return Array.from(keys).sort(function (a, b) {
+            return a.localeCompare(b, "pt-BR");
+          });
+        }
+        return ["__primitive"];
+      },
+      tableRowSource() {
+        if (!this.canUseTableView) return [];
+        return this.currentNode.map(function (item, index) {
+          return { item: item, index: index };
+        });
+      },
+      tableFilteredRowsMeta() {
+        const q = this.tableSearch.trim().toLowerCase();
+        let rows = this.tableRowSource.slice();
+        if (q) {
+          const self = this;
+          rows = rows.filter(function (row) {
+            return self.rowSearchText(row.item).toLowerCase().indexOf(q) !== -1;
+          });
+        }
+        if (this.tableSortColumn) {
+          const col = this.tableSortColumn;
+          const dir = this.tableSortDir === "asc" ? 1 : -1;
+          const self = this;
+          rows.sort(function (a, b) {
+            return dir * self.compareTableValues(self.getCellRaw(a.item, col), self.getCellRaw(b.item, col));
+          });
+        }
+        return rows;
+      },
+      tableTotalPages() {
+        const n = this.tableFilteredRowsMeta.length;
+        return Math.max(1, Math.ceil(n / this.tablePageSize));
+      },
+      tablePagedRows() {
+        const rows = this.tableFilteredRowsMeta;
+        const start = (this.tablePage - 1) * this.tablePageSize;
+        return rows.slice(start, start + this.tablePageSize);
+      },
+      tableRangeLabel() {
+        const total = this.tableFilteredRowsMeta.length;
+        if (total === 0) {
+          return "0 de 0 linhas";
+        }
+        const start = (this.tablePage - 1) * this.tablePageSize + 1;
+        const end = Math.min(this.tablePage * this.tablePageSize, total);
+        return start + "-" + end + " de " + total + " linhas";
+      },
       stats() {
         const result = { objects: 0, arrays: 0, leaves: 0 };
         const visit = (value) => {
@@ -95,6 +178,23 @@
         return "col-lg-7";
       }
     },
+    watch: {
+      tableSearch: function () {
+        this.tablePage = 1;
+      },
+      tablePageSize: function () {
+        this.tablePage = 1;
+      },
+      selectedPath: function () {
+        this.tablePage = 1;
+        const self = this;
+        this.$nextTick(function () {
+          if (!Array.isArray(self.currentNode)) {
+            self.tableViewEnabled = false;
+          }
+        });
+      }
+    },
     methods: {
       readableType(value) {
         if (Array.isArray(value)) return "array";
@@ -126,6 +226,11 @@
         this.selectedPath = [];
         this.expandedState = {};
         this.inputPanelCollapsed = false;
+        this.tableViewEnabled = false;
+        this.tablePage = 1;
+        this.tableSearch = "";
+        this.tableSortColumn = null;
+        this.tableSortDir = "asc";
       },
       loadSample() {
         this.jsonText = JSON.stringify(
@@ -191,6 +296,129 @@
       },
       expandInputPanel() {
         this.inputPanelCollapsed = false;
+      },
+      getCellRaw(item, col) {
+        if (col === "__primitive") {
+          return item;
+        }
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          return Object.prototype.hasOwnProperty.call(item, col) ? item[col] : undefined;
+        }
+        return undefined;
+      },
+      rowSearchText(item) {
+        const self = this;
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          return Object.keys(item)
+            .map(function (k) {
+              return k + ":" + self.cellSearchSnippet(item[k]);
+            })
+            .join(" ");
+        }
+        return this.cellSearchSnippet(item);
+      },
+      cellSearchSnippet(v) {
+        if (v === null || v === undefined) {
+          return "";
+        }
+        if (typeof v === "object") {
+          return JSON.stringify(v);
+        }
+        return String(v);
+      },
+      compareTableValues(a, b) {
+        if (a === b) {
+          return 0;
+        }
+        if (a === null || a === undefined) {
+          return 1;
+        }
+        if (b === null || b === undefined) {
+          return -1;
+        }
+        if (typeof a === "number" && typeof b === "number" && !isNaN(a) && !isNaN(b)) {
+          return a < b ? -1 : 1;
+        }
+        if (typeof a === "boolean" && typeof b === "boolean") {
+          return a === b ? 0 : a ? 1 : -1;
+        }
+        if (typeof a === "object" || typeof b === "object") {
+          return JSON.stringify(a).localeCompare(JSON.stringify(b), "pt-BR");
+        }
+        return String(a).localeCompare(String(b), "pt-BR", { numeric: true });
+      },
+      toggleTableSort(col) {
+        if (this.tableSortColumn === col) {
+          this.tableSortDir = this.tableSortDir === "asc" ? "desc" : "asc";
+        } else {
+          this.tableSortColumn = col;
+          this.tableSortDir = "asc";
+        }
+      },
+      resetTableViewFilters() {
+        this.tableSearch = "";
+        this.tableSortColumn = null;
+        this.tableSortDir = "asc";
+        this.tablePage = 1;
+      },
+      formatTableCell(val) {
+        if (val === null || val === undefined) {
+          return "—";
+        }
+        if (typeof val === "string") {
+          return val;
+        }
+        if (typeof val === "number" || typeof val === "boolean") {
+          return String(val);
+        }
+        if (Array.isArray(val)) {
+          return "[" + val.length + "]";
+        }
+        if (typeof val === "object") {
+          return "{" + Object.keys(val).length + "}";
+        }
+        return String(val);
+      },
+      tableCellClass(val) {
+        if (typeof val === "string") {
+          return "value-string";
+        }
+        if (typeof val === "number") {
+          return "value-number";
+        }
+        if (typeof val === "boolean") {
+          return "value-bool";
+        }
+        if (val === null) {
+          return "value-null";
+        }
+        return "text-secondary";
+      },
+      tableHeaderLabel(col) {
+        if (col === "__primitive") {
+          return "valor";
+        }
+        return col;
+      },
+      copyTableRow(item) {
+        const text = JSON.stringify(item, null, 2);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).catch(function () {
+            window.prompt("Copiar linha", text);
+          });
+        } else {
+          window.prompt("Copiar linha", text);
+        }
+      },
+      tablePagePrev() {
+        if (this.tablePage > 1) {
+          this.tablePage -= 1;
+        }
+      },
+      tablePageNext() {
+        if (this.tablePage < this.tableTotalPages) {
+          this.tablePage += 1;
+        }
       }
     },
     mounted() {
