@@ -16,7 +16,7 @@
         return JSON.stringify(path);
       },
       isExpanded(path) {
-        return this.expandedState[this.pathText(path)] !== false;
+        return this.expandedState[this.pathText(path)] === true;
       },
       isActive(path) {
         return this.pathText(path) === this.pathText(this.activePath);

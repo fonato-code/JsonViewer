@@ -189,3 +189,22 @@ body.theme-light {
   background: color-mix(in srgb, var(--bg-surface-2) 90%, transparent);
   padding: 0.75rem;
 }
+
+.input-rail-wrap {
+  flex: 0 0 auto;
+  width: 4.5rem;
+  max-width: 4.5rem;
+}
+
+.input-panel-rail {
+  min-height: 12rem;
+}
+
+.input-rail-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+}

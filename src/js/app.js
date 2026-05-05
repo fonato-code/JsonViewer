@@ -10,7 +10,8 @@
         jsonError: "",
         rootData: null,
         selectedPath: [],
-        expandedState: {}
+        expandedState: {},
+        inputPanelCollapsed: false
       };
     },
     computed: {
@@ -80,6 +81,18 @@
           visit(this.rootData);
         }
         return result;
+      },
+      inputColumnClass() {
+        if (this.rootData !== null && this.inputPanelCollapsed) {
+          return "col-auto input-rail-wrap";
+        }
+        return "col-lg-5";
+      },
+      viewerColumnClass() {
+        if (this.rootData !== null && this.inputPanelCollapsed) {
+          return "col min-w-0";
+        }
+        return "col-lg-7";
       }
     },
     methods: {
@@ -100,6 +113,7 @@
           this.rootData = parsed;
           this.selectedPath = [];
           this.expandedState = { "[]": true };
+          this.inputPanelCollapsed = true;
         } catch (error) {
           this.rootData = null;
           this.jsonError = "JSON invalido: " + error.message;
@@ -111,6 +125,7 @@
         this.rootData = null;
         this.selectedPath = [];
         this.expandedState = {};
+        this.inputPanelCollapsed = false;
       },
       loadSample() {
         this.jsonText = JSON.stringify(
@@ -147,9 +162,11 @@
       navigateToParent() {
         if (this.selectedPath.length === 0) return;
         this.selectedPath = this.selectedPath.slice(0, -1);
+        this.ensurePathExpanded(this.selectedPath);
       },
       navigateToPath(path) {
         this.selectedPath = path.slice();
+        this.ensurePathExpanded(path);
       },
       toggleExpand(path) {
         const key = JSON.stringify(path);
@@ -157,7 +174,7 @@
       },
       isPathExpanded(path) {
         const key = JSON.stringify(path);
-        return this.expandedState[key] !== false;
+        return this.expandedState[key] === true;
       },
       ensurePathExpanded(path) {
         let partial = [];
@@ -166,6 +183,14 @@
           partial = partial.concat(step);
           this.expandedState[JSON.stringify(partial)] = true;
         });
+      },
+      collapseInputPanel() {
+        if (this.rootData !== null) {
+          this.inputPanelCollapsed = true;
+        }
+      },
+      expandInputPanel() {
+        this.inputPanelCollapsed = false;
       }
     },
     mounted() {

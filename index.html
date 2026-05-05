@@ -29,12 +29,19 @@
       </div>
     </header>
 
-    <main class="row g-4">
-      <section class="col-lg-5">
-        <article class="surface">
+    <main class="row g-4 align-items-stretch">
+      <section :class="inputColumnClass">
+        <article v-if="rootData === null || !inputPanelCollapsed" class="surface h-100">
           <div class="surface-head px-3 py-2 d-flex align-items-center justify-content-between">
             <span>Entrada JSON</span>
-            <small>{{ inputStatus }}</small>
+            <div class="d-flex align-items-center gap-2">
+              <button v-if="rootData !== null" type="button"
+                class="btn btn-link btn-sm text-secondary text-decoration-none p-0 border-0"
+                @click="collapseInputPanel" title="Recolher painel de entrada">
+                <i class="far fa-chevron-left"></i>
+              </button>
+              <small>{{ inputStatus }}</small>
+            </div>
           </div>
           <div class="p-3">
             <textarea class="form-control json-input" v-model="jsonText"
@@ -52,9 +59,18 @@
             </div>
           </div>
         </article>
+        <article v-else class="surface input-panel-rail h-100">
+          <div class="d-flex flex-column align-items-center py-3 px-2 gap-3">
+            <button type="button" class="btn btn-sm btn-outline-primary btn-icon" @click="expandInputPanel"
+              title="Mostrar entrada JSON">
+              <i class="far fa-code"></i>
+            </button>
+            <span class="input-rail-label text-secondary">Entrada</span>
+          </div>
+        </article>
       </section>
 
-      <section class="col-lg-7">
+      <section :class="viewerColumnClass">
         <article class="surface">
           <div class="surface-head px-3 py-2 d-flex align-items-center justify-content-between">
             <span>Visualizador</span>
@@ -65,7 +81,7 @@
               <div class="crumb-area mb-3 d-flex align-items-center justify-content-between gap-2">
                 <nav aria-label="breadcrumb">
                   <ol class="breadcrumb mb-0">
-                    <li class="breadcrumb-item" v-for="(part, idx) in pathParts" :key="part.path">
+                    <li class="breadcrumb-item" v-for="(part, idx) in pathParts" :key="'crumb-' + idx + '-' + JSON.stringify(part.path)">
                       <a v-if="idx < pathParts.length - 1" href="#" @click.prevent="navigateToPath(part.path)"
                         class="text-decoration-none">{{ part.label }}</a>
                       <span v-else>{{ part.label }}</span>
