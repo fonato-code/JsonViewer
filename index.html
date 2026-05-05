@@ -76,10 +76,9 @@
             <span>Visualizador</span>
             <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
               <input type="checkbox" class="btn-check" id="viewTableToggle" v-model="tableViewEnabled"
-                :disabled="!canUseTableView" autocomplete="off"
-                :title="canUseTableView ? 'Visao em tabela (somente neste nivel)' : 'Disponivel quando o nivel atual for um array'">
-              <label class="btn btn-sm btn-outline-primary mb-0" for="viewTableToggle"
-                :class="{ 'table-toggle-disabled': !canUseTableView }">
+                autocomplete="off"
+                title="Preferencia global: em niveis que forem array, usa tabela quando ligado; em objetos, mostra arvore ate voltar a um array">
+              <label class="btn btn-sm btn-outline-primary mb-0" for="viewTableToggle">
                 <i class="far fa-table me-1"></i> Tabela
               </label>
               <small class="text-secondary">{{ viewerLevelSummary }}</small>
@@ -88,44 +87,46 @@
           <div class="viewer-content flex-grow-1 min-h-0 p-3 d-flex flex-column">
             <div v-if="rootData !== null" class="d-flex flex-column flex-grow-1 min-h-0">
               <div class="crumb-area mb-3 d-flex align-items-center justify-content-between gap-2 flex-shrink-0">
-                <nav aria-label="breadcrumb">
-                  <ol class="breadcrumb mb-0">
-                    <li class="breadcrumb-item" v-for="(part, idx) in pathParts" :key="'crumb-' + idx + '-' + JSON.stringify(part.path)">
-                      <a v-if="idx < pathParts.length - 1" href="#" @click.prevent="navigateToPath(part.path)"
-                        class="text-decoration-none">{{ part.label }}</a>
-                      <span v-else>{{ part.label }}</span>
-                    </li>
-                  </ol>
+                <nav class="path-breadcrumb-nav" aria-label="Estrutura de niveis">
+                  <div class="path-breadcrumb-track">
+                    <span class="path-breadcrumb-icon" aria-hidden="true"><i class="far fa-sitemap"></i></span>
+                    <template v-for="(part, idx) in pathParts" :key="'crumb-' + idx + '-' + JSON.stringify(part.path)">
+                      <span v-if="idx > 0" class="path-breadcrumb-sep" aria-hidden="true">&gt;</span>
+                      <a v-if="idx < pathParts.length - 1" href="#" class="path-breadcrumb-link"
+                        @click.prevent="navigateToPath(part.path)">{{ part.label }}</a>
+                      <span v-else class="path-breadcrumb-current">{{ part.label }}</span>
+                    </template>
+                  </div>
                 </nav>
-                <button class="btn btn-sm btn-outline-secondary" type="button" @click="navigateToParent"
+                <button class="btn btn-sm btn-outline-secondary flex-shrink-0" type="button" @click="navigateToParent"
                   :disabled="selectedPath.length === 0">
                   <i class="far fa-level-up-alt me-1"></i> Subir
                 </button>
               </div>
 
-              <div class="row g-3 mb-3 flex-shrink-0">
+              <div class="row g-2 mb-2 flex-shrink-0">
                 <div class="col-6 col-md-3">
-                  <div class="stats-card">
-                    <div class="small text-secondary">Tipo</div>
-                    <div class="fw-semibold">{{ currentNodeType }}</div>
+                  <div class="stats-card d-flex align-items-center justify-content-between gap-2">
+                    <span class="stats-card-label small text-secondary">Tipo</span>
+                    <span class="stats-card-value fw-semibold">{{ currentNodeType }}</span>
                   </div>
                 </div>
                 <div class="col-6 col-md-3">
-                  <div class="stats-card">
-                    <div class="small text-secondary">Filhos</div>
-                    <div class="fw-semibold">{{ currentNodeChildren }}</div>
+                  <div class="stats-card d-flex align-items-center justify-content-between gap-2">
+                    <span class="stats-card-label small text-secondary">Filhos</span>
+                    <span class="stats-card-value fw-semibold">{{ currentNodeChildren }}</span>
                   </div>
                 </div>
                 <div class="col-6 col-md-3">
-                  <div class="stats-card">
-                    <div class="small text-secondary">Objetos</div>
-                    <div class="fw-semibold">{{ stats.objects }}</div>
+                  <div class="stats-card d-flex align-items-center justify-content-between gap-2">
+                    <span class="stats-card-label small text-secondary">Objetos</span>
+                    <span class="stats-card-value fw-semibold">{{ stats.objects }}</span>
                   </div>
                 </div>
                 <div class="col-6 col-md-3">
-                  <div class="stats-card">
-                    <div class="small text-secondary">Arrays</div>
-                    <div class="fw-semibold">{{ stats.arrays }}</div>
+                  <div class="stats-card d-flex align-items-center justify-content-between gap-2">
+                    <span class="stats-card-label small text-secondary">Arrays</span>
+                    <span class="stats-card-value fw-semibold">{{ stats.arrays }}</span>
                   </div>
                 </div>
               </div>
@@ -163,7 +164,6 @@
                         <col style="width: 3.25rem" />
                         <col v-for="col in tableColumnKeys" :key="'cg-' + col"
                           :style="{ width: tableColPixelWidth(col) + 'px' }" />
-                        <col style="width: 3.5rem" />
                       </colgroup>
                       <thead>
                         <tr>
@@ -180,22 +180,24 @@
                               @mousedown.prevent.stop="onColResizeMouseDown($event, col)"
                               @dblclick.prevent.stop="onColResizeDblClick($event, col)"></span>
                           </th>
-                          <th scope="col" class="text-end text-secondary">Acoes</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr v-for="(rowMeta, rIdx) in tablePagedRows" :key="'row-' + rowMeta.index + '-' + rIdx">
+                        <tr v-for="(rowMeta, rIdx) in tablePagedRows" :key="'row-' + rowMeta.index + '-' + rIdx"
+                          class="table-data-row"
+                          @contextmenu.prevent="openRowContextMenu($event, rowMeta.item)">
                           <td class="text-secondary small table-col-idx">{{ (tablePage - 1) * tablePageSize + rIdx + 1 }}</td>
                           <td v-for="col in tableColumnKeys" :key="'c-' + rowMeta.index + '-' + col" class="table-data-cell">
-                            <span class="table-cell-text" :class="tableCellClass(getCellRaw(rowMeta.item, col))">
+                            <button v-if="isTableCellDrillable(rowMeta.item, col)" type="button"
+                              class="table-cell-drill"
+                              :class="tableCellClass(tableCellRaw(rowMeta.item, col))"
+                              :title="tableCellDrillTitle(rowMeta.item, col)"
+                              @click="drillTableCell(rowMeta, col)">
+                              {{ formatTableCell(tableCellRaw(rowMeta.item, col)) }}
+                            </button>
+                            <span v-else class="table-cell-text" :class="tableCellClass(getCellRaw(rowMeta.item, col))">
                               {{ formatTableCell(getCellRaw(rowMeta.item, col)) }}
                             </span>
-                          </td>
-                          <td class="text-end table-actions-cell">
-                            <button type="button" class="btn btn-sm btn-link p-0 text-secondary"
-                              title="Copiar linha (JSON)" @click="copyTableRow(rowMeta.item)">
-                              <i class="far fa-copy"></i>
-                            </button>
                           </td>
                         </tr>
                       </tbody>
@@ -230,6 +232,13 @@
           </div>
         </article>
       </main>
+    </div>
+
+    <div v-show="rowContextMenu.visible" ref="rowContextMenuEl" class="row-context-menu" role="menu"
+      :style="{ left: rowContextMenu.x + 'px', top: rowContextMenu.y + 'px' }" @mousedown.stop>
+      <button type="button" class="row-context-menu-item" role="menuitem" @click="onRowContextMenuCopy">
+        <i class="far fa-copy me-2"></i> Copiar linha (JSON)
+      </button>
     </div>
   </div>
 

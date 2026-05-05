@@ -13,12 +13,18 @@
         expandedState: {},
         inputPanelCollapsed: false,
         tableViewEnabled: false,
-        tablePageSize: 50,
+        tablePageSize: 10,
         tablePage: 1,
         tableSearch: "",
         tableSortColumn: null,
         tableSortDir: "asc",
-        tableColumnWidths: {}
+        tableColumnWidths: {},
+        rowContextMenu: {
+          visible: false,
+          x: 0,
+          y: 0,
+          item: null
+        }
       };
     },
     computed: {
@@ -192,9 +198,7 @@
         this.tableColumnWidths = {};
         const self = this;
         this.$nextTick(function () {
-          if (!Array.isArray(self.currentNode)) {
-            self.tableViewEnabled = false;
-          } else if (self.showTableView) {
+          if (self.showTableView && self.canUseTableView) {
             self.initTableColumnWidthsFromContent();
           }
         });
@@ -251,10 +255,12 @@
         this.inputPanelCollapsed = false;
         this.tableViewEnabled = false;
         this.tablePage = 1;
+        this.tablePageSize = 10;
         this.tableSearch = "";
         this.tableSortColumn = null;
         this.tableSortDir = "asc";
         this.tableColumnWidths = {};
+        this.dismissRowContextMenu();
       },
       loadSample() {
         this.jsonText = JSON.stringify(
@@ -285,15 +291,18 @@
         this.parseJson();
       },
       selectPath(path) {
+        this.dismissRowContextMenu();
         this.selectedPath = path.slice();
         this.ensurePathExpanded(path);
       },
       navigateToParent() {
         if (this.selectedPath.length === 0) return;
+        this.dismissRowContextMenu();
         this.selectedPath = this.selectedPath.slice(0, -1);
         this.ensurePathExpanded(this.selectedPath);
       },
       navigateToPath(path) {
+        this.dismissRowContextMenu();
         this.selectedPath = path.slice();
         this.ensurePathExpanded(path);
       },
@@ -422,6 +431,91 @@
         }
         return col;
       },
+      tableCellRaw(item, col) {
+        if (col === "__primitive") {
+          return item;
+        }
+        return this.getCellRaw(item, col);
+      },
+      isTableCellDrillable(item, col) {
+        const raw = this.tableCellRaw(item, col);
+        return raw !== null && typeof raw === "object";
+      },
+      tableCellDrillTitle(item, col) {
+        if (!this.isTableCellDrillable(item, col)) {
+          return "";
+        }
+        const raw = this.tableCellRaw(item, col);
+        return Array.isArray(raw)
+          ? "Abrir este array (modo tabela)"
+          : "Abrir este objeto (modo arvore)";
+      },
+      drillTableCell(rowMeta, col) {
+        const raw = this.tableCellRaw(rowMeta.item, col);
+        if (raw === null || typeof raw !== "object") {
+          return;
+        }
+        let newPath;
+        if (col === "__primitive") {
+          newPath = this.selectedPath.concat([String(rowMeta.index)]);
+        } else {
+          newPath = this.selectedPath.concat([String(rowMeta.index), col]);
+        }
+        this.dismissRowContextMenu();
+        this.navigateToPath(newPath);
+      },
+      openRowContextMenu(ev, item) {
+        ev.preventDefault();
+        if (this._docCloseContext) {
+          document.removeEventListener("mousedown", this._docCloseContext, true);
+        }
+        this.rowContextMenu.item = item;
+        this.rowContextMenu.x = ev.clientX;
+        this.rowContextMenu.y = ev.clientY;
+        this.rowContextMenu.visible = true;
+        const self = this;
+        this.$nextTick(function () {
+          self.clampRowContextMenuPosition();
+          document.addEventListener("mousedown", self._docCloseContext, true);
+        });
+      },
+      clampRowContextMenuPosition() {
+        const el = this.$refs.rowContextMenuEl;
+        if (!el) {
+          return;
+        }
+        const pad = 8;
+        let x = this.rowContextMenu.x;
+        let y = this.rowContextMenu.y;
+        const rect = el.getBoundingClientRect();
+        if (rect.right > window.innerWidth - pad) {
+          x = Math.max(pad, window.innerWidth - rect.width - pad);
+        }
+        if (rect.bottom > window.innerHeight - pad) {
+          y = Math.max(pad, window.innerHeight - rect.height - pad);
+        }
+        if (x < pad) {
+          x = pad;
+        }
+        if (y < pad) {
+          y = pad;
+        }
+        this.rowContextMenu.x = x;
+        this.rowContextMenu.y = y;
+      },
+      dismissRowContextMenu() {
+        if (this._docCloseContext) {
+          document.removeEventListener("mousedown", this._docCloseContext, true);
+        }
+        this.rowContextMenu.visible = false;
+        this.rowContextMenu.item = null;
+      },
+      onRowContextMenuCopy() {
+        if (this.rowContextMenu.item != null) {
+          this.copyTableRow(this.rowContextMenu.item);
+        }
+        this.dismissRowContextMenu();
+      },
       copyTableRow(item) {
         const text = JSON.stringify(item, null, 2);
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -523,8 +617,17 @@
     },
     mounted() {
       document.body.classList.add("theme-dark");
+      const self = this;
+      this._docCloseContext = function (e) {
+        const menu = self.$refs.rowContextMenuEl;
+        if (menu && menu.contains(e.target)) {
+          return;
+        }
+        self.dismissRowContextMenu();
+      };
     },
     beforeUnmount() {
+      this.dismissRowContextMenu();
       if (this._tableMeasureEl && this._tableMeasureEl.parentNode) {
         this._tableMeasureEl.parentNode.removeChild(this._tableMeasureEl);
       }
