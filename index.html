@@ -399,7 +399,7 @@
                       <tbody>
                         <tr v-for="(rowMeta, rIdx) in tablePagedRows" :key="'row-' + rowMeta.index + '-' + rIdx"
                           class="table-data-row"
-                          @contextmenu.prevent="openRowContextMenu($event, rowMeta.item)">
+                          @contextmenu.prevent="openRowContextMenu($event, rowMeta.item, rowMeta.index)">
                           <td class="text-secondary small table-col-idx">
                             <div class="d-flex align-items-center justify-content-end gap-1">
                               <span>{{ (tablePage - 1) * tablePageSize + rIdx + 1 }}</span>
@@ -448,7 +448,8 @@
                   :value-preview-resolver="treeValuePreview" :value-class-resolver="treeValueClass"
                   :behavior-resolver="treeRowBehaviors" :behavior-icon-resolver="behaviorActionIconClass"
                   @toggle="toggleExpand" @select="selectPath"
-                  @run-behavior="onTreeRunBehavior($event)"></json-node>
+                  @run-behavior="onTreeRunBehavior($event)"
+                  @context-menu="openTreeContextMenu($event)"></json-node>
               </div>
             </div>
             <div v-else class="state-box flex-shrink-0">
@@ -462,8 +463,17 @@
 
     <div v-show="rowContextMenu.visible" ref="rowContextMenuEl" class="row-context-menu" role="menu"
       :style="{ left: rowContextMenu.x + 'px', top: rowContextMenu.y + 'px' }" @mousedown.stop>
-      <button type="button" class="row-context-menu-item" role="menuitem" @click="onRowContextMenuCopy">
-        <i class="far fa-copy me-2"></i> Copiar linha (JSON)
+      <button type="button" class="row-context-menu-item" role="menuitem" @click="onContextMenuCopyJson">
+        <i class="far fa-copy me-2"></i> Copiar (JSON)
+      </button>
+      <button type="button" class="row-context-menu-item" role="menuitem" @click="onContextMenuCopyJsonPath">
+        <i class="far fa-code me-2"></i> Copiar (JSON Path)
+      </button>
+      <button type="button" class="row-context-menu-item" role="menuitem" @click="onContextMenuCopyValue">
+        <i class="far fa-clipboard me-2"></i> Copiar (Valor)
+      </button>
+      <button type="button" class="row-context-menu-item" role="menuitem" @click="onContextMenuCopyKey">
+        <i class="far fa-key me-2"></i> Copiar (Chave)
       </button>
     </div>
 

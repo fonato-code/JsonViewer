@@ -32,7 +32,12 @@
           visible: false,
           x: 0,
           y: 0,
-          item: null
+          source: null,
+          tableItem: null,
+          tableRowIndex: null,
+          treePath: null,
+          treeNodeKey: null,
+          treeValue: null
         },
         toast: {
           visible: false,
@@ -1800,12 +1805,41 @@
         this.dismissRowContextMenu();
         this.navigateToPath(newPath);
       },
-      openRowContextMenu(ev, item) {
+      openRowContextMenu(ev, item, rowIndex) {
         ev.preventDefault();
         if (this._docCloseContext) {
           document.removeEventListener("mousedown", this._docCloseContext, true);
         }
-        this.rowContextMenu.item = item;
+        this.rowContextMenu.source = "table";
+        this.rowContextMenu.tableItem = item;
+        this.rowContextMenu.tableRowIndex = rowIndex != null && rowIndex !== undefined ? rowIndex : null;
+        this.rowContextMenu.treePath = null;
+        this.rowContextMenu.treeNodeKey = null;
+        this.rowContextMenu.treeValue = null;
+        this.rowContextMenu.x = ev.clientX;
+        this.rowContextMenu.y = ev.clientY;
+        this.rowContextMenu.visible = true;
+        const self = this;
+        this.$nextTick(function () {
+          self.clampRowContextMenuPosition();
+          document.addEventListener("mousedown", self._docCloseContext, true);
+        });
+      },
+      openTreeContextMenu(payload) {
+        if (!payload || !payload.event) {
+          return;
+        }
+        const ev = payload.event;
+        ev.preventDefault();
+        if (this._docCloseContext) {
+          document.removeEventListener("mousedown", this._docCloseContext, true);
+        }
+        this.rowContextMenu.source = "tree";
+        this.rowContextMenu.treePath = payload.path ? payload.path.slice() : [];
+        this.rowContextMenu.treeNodeKey = payload.nodeKey != null ? String(payload.nodeKey) : "";
+        this.rowContextMenu.treeValue = payload.node;
+        this.rowContextMenu.tableItem = null;
+        this.rowContextMenu.tableRowIndex = null;
         this.rowContextMenu.x = ev.clientX;
         this.rowContextMenu.y = ev.clientY;
         this.rowContextMenu.visible = true;
@@ -1844,26 +1878,127 @@
           document.removeEventListener("mousedown", this._docCloseContext, true);
         }
         this.rowContextMenu.visible = false;
-        this.rowContextMenu.item = null;
+        this.rowContextMenu.source = null;
+        this.rowContextMenu.tableItem = null;
+        this.rowContextMenu.tableRowIndex = null;
+        this.rowContextMenu.treePath = null;
+        this.rowContextMenu.treeNodeKey = null;
+        this.rowContextMenu.treeValue = null;
       },
-      onRowContextMenuCopy() {
-        if (this.rowContextMenu.item != null) {
-          this.copyTableRow(this.rowContextMenu.item);
+      copyTextToClipboard(text, toastMessage) {
+        const msg = toastMessage || "Copiado para a area de transferencia.";
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          const self = this;
+          navigator.clipboard
+            .writeText(text)
+            .then(function () {
+              self.showToast(msg);
+            })
+            .catch(function () {
+              window.prompt("Copiar", text);
+            });
+        } else {
+          window.prompt("Copiar", text);
         }
+      },
+      formatJsonPathForClipboard(path) {
+        if (!path || !path.length) {
+          return "$";
+        }
+        let s = "$";
+        for (let i = 0; i < path.length; i++) {
+          const segStr = String(path[i]);
+          if (this.isNumericSegment(segStr)) {
+            s += "[" + segStr + "]";
+          } else if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(segStr)) {
+            s += "." + segStr;
+          } else {
+            s += "['" + segStr.replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "']";
+          }
+        }
+        return s;
+      },
+      formatValueForClipboard(value) {
+        if (value === undefined) {
+          return "";
+        }
+        if (value === null) {
+          return "null";
+        }
+        const t = typeof value;
+        if (t === "string") {
+          return value;
+        }
+        if (t === "number" || t === "boolean") {
+          return String(value);
+        }
+        try {
+          return JSON.stringify(value, null, 2);
+        } catch (err) {
+          return String(value);
+        }
+      },
+      onContextMenuCopyJson() {
+        const src = this.rowContextMenu.source;
+        let value;
+        if (src === "table") {
+          value = this.rowContextMenu.tableItem;
+        } else if (src === "tree") {
+          value = this.rowContextMenu.treeValue;
+        }
+        if (value === undefined) {
+          this.dismissRowContextMenu();
+          return;
+        }
+        const text = JSON.stringify(value, null, 2);
+        this.copyTextToClipboard(text, "JSON copiado para a area de transferencia.");
+        this.dismissRowContextMenu();
+      },
+      onContextMenuCopyJsonPath() {
+        const src = this.rowContextMenu.source;
+        let path;
+        if (src === "table") {
+          const idx = this.rowContextMenu.tableRowIndex;
+          path = idx != null && idx !== undefined ? this.selectedPath.concat([String(idx)]) : this.selectedPath.slice();
+        } else if (src === "tree") {
+          path = this.rowContextMenu.treePath || [];
+        } else {
+          this.dismissRowContextMenu();
+          return;
+        }
+        this.copyTextToClipboard(this.formatJsonPathForClipboard(path), "JSON Path copiado para a area de transferencia.");
+        this.dismissRowContextMenu();
+      },
+      onContextMenuCopyValue() {
+        const src = this.rowContextMenu.source;
+        let value;
+        if (src === "table") {
+          value = this.rowContextMenu.tableItem;
+        } else if (src === "tree") {
+          value = this.rowContextMenu.treeValue;
+        }
+        if (value === undefined) {
+          this.dismissRowContextMenu();
+          return;
+        }
+        this.copyTextToClipboard(this.formatValueForClipboard(value), "Valor copiado para a area de transferencia.");
+        this.dismissRowContextMenu();
+      },
+      onContextMenuCopyKey() {
+        const src = this.rowContextMenu.source;
+        let keyText = "";
+        if (src === "table") {
+          const idx = this.rowContextMenu.tableRowIndex;
+          keyText = idx != null && idx !== undefined ? String(idx) : "";
+        } else if (src === "tree") {
+          keyText = this.rowContextMenu.treeNodeKey || "";
+        }
+        this.copyTextToClipboard(keyText, "Chave copiada para a area de transferencia.");
         this.dismissRowContextMenu();
       },
       copyTableRow(item) {
         const text = JSON.stringify(item, null, 2);
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          const self = this;
-          navigator.clipboard.writeText(text).then(function () {
-            self.showToast("Linha copiada para a area de transferencia.");
-          }).catch(function () {
-            window.prompt("Copiar linha", text);
-          });
-        } else {
-          window.prompt("Copiar linha", text);
-        }
+        this.copyTextToClipboard(text, "JSON copiado para a area de transferencia.");
       },
       showToast(message, type) {
         this.toast.message = message;

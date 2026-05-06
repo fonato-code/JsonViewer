@@ -66,6 +66,9 @@
       },
       emitRunBehavior(behavior) {
         this.$emit("run-behavior", { behavior: behavior, node: this.node, path: this.path });
+      },
+      emitContextMenu(ev) {
+        this.$emit("context-menu", { event: ev, path: this.path, nodeKey: this.nodeKey, node: this.node });
       }
     },
     computed: {
@@ -82,7 +85,7 @@
     },
     template: `
       <div class="tree-node">
-        <div class="tree-line" :class="{active: isActive(path)}" @click="emitSelect(path)">
+        <div class="tree-line" :class="{active: isActive(path)}" @click="emitSelect(path)" @contextmenu.prevent="emitContextMenu($event)">
           <span v-if="isContainer" @click.stop="emitToggle(path)" class="tree-node-toggle text-secondary">
             <i :class="isExpanded(path) ? 'far fa-chevron-down' : 'far fa-chevron-right'"></i>
           </span>
@@ -119,6 +122,7 @@
             @toggle="$emit('toggle', $event)"
             @select="$emit('select', $event)"
             @run-behavior="$emit('run-behavior', $event)"
+            @context-menu="$emit('context-menu', $event)"
           ></json-node>
         </div>
       </div>
