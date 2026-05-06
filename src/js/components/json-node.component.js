@@ -111,7 +111,7 @@
               v-for="behavior in nodeBehaviors"
               :key="'node-bhv-' + pathText(path) + '-' + behavior.id"
               type="button"
-              :class="['btn', 'btn-xs', 'table-row-behavior-btn', 'tree-row-behavior-btn', behavior.type === 'pieChart' ? 'btn-outline-warning' : 'btn-outline-info']"
+              :class="['btn', 'btn-xs', 'table-row-behavior-btn', 'tree-row-behavior-btn', behavior.type === 'pieChart' ? 'btn-outline-warning' : behavior.type === 'timeline' ? 'btn-outline-primary' : 'btn-outline-info']"
               @click.stop="emitRunBehavior(behavior)"
               :title="behavior.name"
             >

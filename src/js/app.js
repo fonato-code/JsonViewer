@@ -67,6 +67,11 @@
             type: "pieChart",
             label: "Grafico Pizza",
             requiredConfig: ["groupByProperty"]
+          },
+          timeline: {
+            type: "timeline",
+            label: "Linha do Tempo",
+            requiredConfig: ["timelineXProperty", "timelineYProperties"]
           }
         },
         activeBehaviorModal: {
@@ -77,7 +82,8 @@
           embedUrl: "",
           points: [],
           kind: "map",
-          chartData: null
+          chartData: null,
+          lineChartData: null
         },
         globalSettings: {
           googleMapsApiKey: ""
@@ -301,6 +307,34 @@
             this.behaviorHasRequiredConfig(item)
         );
       },
+      currentTableTimelineBehaviors() {
+        if (!Array.isArray(this.currentNode) || !this.currentArrayItemClass) {
+          return [];
+        }
+        const list = this.behaviorRulesByClass[this.currentArrayItemClass] || [];
+        return list.filter(
+          (item) =>
+            item &&
+            item.type === "timeline" &&
+            this.behaviorAllowedForClass(item, this.currentArrayItemClass) &&
+            item.enabled &&
+            this.behaviorHasRequiredConfig(item)
+        );
+      },
+      schemaTimelineXPropertyOptions() {
+        const info = this.selectedSchemaClassInfo;
+        if (!info) return [];
+        return info.properties.filter(function (p) {
+          return p.dateLike || p.types.indexOf("string") !== -1 || p.types.indexOf("number") !== -1;
+        });
+      },
+      schemaTimelineYPropertyOptions() {
+        const info = this.selectedSchemaClassInfo;
+        if (!info) return [];
+        return info.properties.filter(function (p) {
+          return p.types.indexOf("number") !== -1 || p.types.indexOf("string") !== -1;
+        });
+      },
       needsTableColumnWidthInit() {
         if (!this.showTableView || !this.tableColumnKeys.length) {
           return false;
@@ -350,6 +384,12 @@
       }
     },
     methods: {
+      timelineYOptionsExcludingX(behavior) {
+        const x = behavior && behavior.config ? behavior.config.timelineXProperty : "";
+        return this.schemaTimelineYPropertyOptions.filter(function (p) {
+          return p.name !== x;
+        });
+      },
       readableType(value) {
         if (Array.isArray(value)) return "array";
         if (value === null) return "null";
@@ -843,10 +883,29 @@
                 name: item.name || (this.behaviorCatalog[item.type] ? this.behaviorCatalog[item.type].label : "Comportamento"),
                 enabled: item.enabled !== false,
                 config: Object.assign(
-                  { latitudeProperty: "", longitudeProperty: "", groupByProperty: "", valueProperty: "" },
+                  {
+                    latitudeProperty: "",
+                    longitudeProperty: "",
+                    groupByProperty: "",
+                    valueProperty: "",
+                    timelineXProperty: "",
+                    timelineYProperties: []
+                  },
                   item.config || {}
                 )
               };
+              if (!Array.isArray(normalized.config.timelineYProperties)) {
+                if (typeof normalized.config.timelineYProperties === "string" && normalized.config.timelineYProperties.trim()) {
+                  normalized.config.timelineYProperties = normalized.config.timelineYProperties
+                    .split(",")
+                    .map(function (s) {
+                      return s.trim();
+                    })
+                    .filter(Boolean);
+                } else {
+                  normalized.config.timelineYProperties = [];
+                }
+              }
               if (normalized.type === "marker") {
                 if (!allowed[className][normalized.config.latitudeProperty]) {
                   normalized.config.latitudeProperty = "";
@@ -865,6 +924,18 @@
                 if (normalized.config.valueProperty && !allowed[className][normalized.config.valueProperty]) {
                   normalized.config.valueProperty = "";
                 }
+              }
+              if (normalized.type === "timeline") {
+                if (!this.isArrayItemClass(className)) {
+                  normalized.enabled = false;
+                }
+                if (!allowed[className][normalized.config.timelineXProperty]) {
+                  normalized.config.timelineXProperty = "";
+                }
+                const yp = Array.isArray(normalized.config.timelineYProperties) ? normalized.config.timelineYProperties : [];
+                normalized.config.timelineYProperties = yp.filter(function (p) {
+                  return p && allowed[className][p] && p !== normalized.config.timelineXProperty;
+                });
               }
               return normalized;
             });
@@ -988,7 +1059,8 @@
           embedUrl: "",
           points: [],
           kind: "map",
-          chartData: null
+          chartData: null,
+          lineChartData: null
         };
         this.selectedSchemaClass = "";
         this.selectedSchemaProperty = "";
@@ -1233,7 +1305,7 @@
       },
       behaviorAllowedForClass(behavior, className) {
         if (!behavior || !behavior.type) return false;
-        if (behavior.type === "pieChart") {
+        if (behavior.type === "pieChart" || behavior.type === "timeline") {
           return this.isArrayItemClass(className);
         }
         return true;
@@ -1250,7 +1322,9 @@
             latitudeProperty: "",
             longitudeProperty: "",
             groupByProperty: "",
-            valueProperty: ""
+            valueProperty: "",
+            timelineXProperty: "",
+            timelineYProperties: []
           }
         };
       },
@@ -1266,18 +1340,51 @@
       },
       onBehaviorTypeChanged(behavior) {
         if (!behavior) return;
-        if (behavior.type === "pieChart" && !this.selectedSchemaClassIsArrayItem) {
-          this.showToast("Grafico Pizza so pode ser usado em classe de lista.", "error");
+        if (
+          (behavior.type === "pieChart" || behavior.type === "timeline") &&
+          !this.selectedSchemaClassIsArrayItem
+        ) {
+          this.showToast(
+            (behavior.type === "pieChart" ? "Grafico Pizza" : "Linha do Tempo") + " so pode ser usado em classe de lista.",
+            "error"
+          );
           behavior.type = "marker";
         }
         const catalog = this.behaviorCatalog[behavior.type];
-        if (catalog && (!behavior.name || behavior.name === "Marker" || behavior.name === "Grafico Pizza")) {
+        if (
+          catalog &&
+          (!behavior.name ||
+            behavior.name === "Marker" ||
+            behavior.name === "Grafico Pizza" ||
+            behavior.name === "Linha do Tempo")
+        ) {
           behavior.name = catalog.label;
         }
         behavior.config = Object.assign(
-          { latitudeProperty: "", longitudeProperty: "", groupByProperty: "", valueProperty: "" },
+          {
+            latitudeProperty: "",
+            longitudeProperty: "",
+            groupByProperty: "",
+            valueProperty: "",
+            timelineXProperty: "",
+            timelineYProperties: []
+          },
           behavior.config || {}
         );
+        if (!Array.isArray(behavior.config.timelineYProperties)) {
+          behavior.config.timelineYProperties = [];
+        }
+      },
+      onTimelineXPropertyChanged(behavior) {
+        if (!behavior || !behavior.config) return;
+        const x = behavior.config.timelineXProperty;
+        if (!Array.isArray(behavior.config.timelineYProperties)) {
+          behavior.config.timelineYProperties = [];
+          return;
+        }
+        behavior.config.timelineYProperties = behavior.config.timelineYProperties.filter(function (p) {
+          return p !== x;
+        });
       },
       removeBehaviorFromSelectedClass(behaviorId) {
         if (!this.selectedSchemaClass) return;
@@ -1295,15 +1402,35 @@
           next[className] = arr
             .filter((item) => item && typeof item === "object" && item.type)
             .map((item, idx) => {
+              const cfg = Object.assign(
+                {
+                  latitudeProperty: "",
+                  longitudeProperty: "",
+                  groupByProperty: "",
+                  valueProperty: "",
+                  timelineXProperty: "",
+                  timelineYProperties: []
+                },
+                item.config || {}
+              );
+              if (!Array.isArray(cfg.timelineYProperties)) {
+                if (typeof cfg.timelineYProperties === "string" && cfg.timelineYProperties.trim()) {
+                  cfg.timelineYProperties = cfg.timelineYProperties
+                    .split(",")
+                    .map(function (s) {
+                      return s.trim();
+                    })
+                    .filter(Boolean);
+                } else {
+                  cfg.timelineYProperties = [];
+                }
+              }
               return {
                 id: item.id || ("bhv-" + className + "-" + idx),
                 type: item.type,
                 name: item.name || (this.behaviorCatalog[item.type] ? this.behaviorCatalog[item.type].label : "Comportamento"),
                 enabled: item.enabled !== false,
-                config: Object.assign(
-                  { latitudeProperty: "", longitudeProperty: "", groupByProperty: "", valueProperty: "" },
-                  item.config || {}
-                )
+                config: cfg
               };
             });
         });
@@ -1317,6 +1444,10 @@
         if (behavior.type === "pieChart") {
           return !!(behavior.config && behavior.config.groupByProperty);
         }
+        if (behavior.type === "timeline") {
+          const y = behavior.config && behavior.config.timelineYProperties;
+          return !!(behavior.config && behavior.config.timelineXProperty && Array.isArray(y) && y.length > 0);
+        }
         return false;
       },
       isBehaviorEnabledForNode(behavior, nodeValue) {
@@ -1326,7 +1457,7 @@
         if (behavior.type === "marker") {
           return nodeValue && typeof nodeValue === "object" && !Array.isArray(nodeValue);
         }
-        if (behavior.type === "pieChart") {
+        if (behavior.type === "pieChart" || behavior.type === "timeline") {
           return false;
         }
         return false;
@@ -1365,7 +1496,8 @@
             embedUrl: this.buildGoogleMapsEmbedUrl(coords.lat, coords.lng),
             points: [coords],
             kind: "map",
-            chartData: null
+            chartData: null,
+            lineChartData: null
           };
           this.$nextTick(() => this.renderBehaviorMap());
           return;
@@ -1449,6 +1581,59 @@
         const colors = labels.map((_, idx) => palette[idx % palette.length]);
         return { labels: labels, values: values, colors: colors };
       },
+      resolveTimelineChartData(behavior, rows) {
+        const xProp = behavior.config.timelineXProperty;
+        let yProps = behavior.config.timelineYProperties || [];
+        if (!Array.isArray(yProps)) {
+          yProps = [];
+        }
+        yProps = yProps.filter(Boolean);
+        if (!xProp || !yProps.length) {
+          return null;
+        }
+        const palette = ["#2f8bff", "#2ad39f", "#f8d26f", "#f78ca2", "#7db8ff", "#6ce5b6", "#f7b267", "#9f86ff", "#4cc9f0", "#ff6b6b"];
+        const points = [];
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || typeof row !== "object" || Array.isArray(row)) {
+            continue;
+          }
+          const d = this.parseDateInput(row[xProp]);
+          if (!d) {
+            continue;
+          }
+          const entry = { t: d.getTime(), label: this.formatDateByMode(d, "iso-datetime-local") };
+          for (let j = 0; j < yProps.length; j++) {
+            const yp = yProps[j];
+            const n = Number(row[yp]);
+            entry[yp] = isFinite(n) ? n : null;
+          }
+          points.push(entry);
+        }
+        if (!points.length) {
+          return null;
+        }
+        points.sort(function (a, b) {
+          return a.t - b.t;
+        });
+        const labels = points.map(function (p) {
+          return p.label;
+        });
+        const datasets = yProps.map(function (yp, idx) {
+          return {
+            label: yp,
+            data: points.map(function (p) {
+              return p[yp];
+            }),
+            borderColor: palette[idx % palette.length],
+            backgroundColor: "transparent",
+            tension: 0.2,
+            fill: false,
+            spanGaps: true
+          };
+        });
+        return { labels: labels, datasets: datasets };
+      },
       renderBehaviorMap() {
         const L = window.L;
         const el = this.$refs.behaviorMapEl;
@@ -1528,6 +1713,63 @@
           }
         });
       },
+      renderBehaviorLineChart() {
+        const Chart = window.Chart;
+        const canvas = this.$refs.behaviorLineChartEl;
+        const data = this.activeBehaviorModal.lineChartData;
+        if (!Chart || !canvas || !data || !data.labels || !data.datasets || !data.datasets.length) {
+          return;
+        }
+        if (this._behaviorChart) {
+          this._behaviorChart.destroy();
+          this._behaviorChart = null;
+        }
+        const tickColor = this.theme === "dark" ? "#8ea3d7" : "#5b6c93";
+        const gridColor = this.theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(15, 29, 60, 0.12)";
+        this._behaviorChart = new Chart(canvas, {
+          type: "line",
+          data: {
+            labels: data.labels,
+            datasets: data.datasets.map(function (ds) {
+              return Object.assign({}, ds, {
+                borderWidth: 2,
+                pointRadius: 3,
+                pointHoverRadius: 5
+              });
+            })
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+              legend: {
+                position: "bottom",
+                labels: { color: tickColor, boxWidth: 12 }
+              },
+              tooltip: {
+                mode: "index",
+                intersect: false
+              }
+            },
+            scales: {
+              x: {
+                ticks: {
+                  color: tickColor,
+                  maxRotation: 45,
+                  autoSkip: true,
+                  maxTicksLimit: 28
+                },
+                grid: { color: gridColor }
+              },
+              y: {
+                ticks: { color: tickColor },
+                grid: { color: gridColor }
+              }
+            }
+          }
+        });
+      },
       closeBehaviorModal() {
         if (this._behaviorLeafletMap) {
           this._behaviorLeafletMap.remove();
@@ -1538,6 +1780,7 @@
           this._behaviorChart = null;
         }
         this.activeBehaviorModal.visible = false;
+        this.activeBehaviorModal.lineChartData = null;
       },
       openBehaviorMapLink() {
         if (!this.activeBehaviorModal.mapUrl) return;
@@ -1585,6 +1828,7 @@
           return Array.isArray(node) ? "far fa-route" : "far fa-map-marker-alt";
         }
         if (behavior.type === "pieChart") return "far fa-chart-pie";
+        if (behavior.type === "timeline") return "far fa-chart-line";
         return "far fa-bolt";
       },
       arrayItemClassForPath(path) {
@@ -1610,7 +1854,15 @@
             item.enabled &&
             this.behaviorHasRequiredConfig(item)
         );
-        return markers.concat(pies);
+        const timelines = list.filter(
+          (item) =>
+            item &&
+            item.type === "timeline" &&
+            this.behaviorAllowedForClass(item, itemClass) &&
+            item.enabled &&
+            this.behaviorHasRequiredConfig(item)
+        );
+        return markers.concat(pies).concat(timelines);
       },
       treeRowBehaviors(path, rowItem) {
         if (Array.isArray(rowItem)) {
@@ -1674,9 +1926,34 @@
             embedUrl: "",
             points: [],
             kind: "pie",
-            chartData: pieData
+            chartData: pieData,
+            lineChartData: null
           };
           this.$nextTick(() => this.renderBehaviorChart());
+          return;
+        }
+        if (behavior.type === "timeline") {
+          if (!arrayItemClassName || !this.behaviorAllowedForClass(behavior, arrayItemClassName)) {
+            this.showToast("Linha do Tempo disponivel apenas para niveis de lista.", "error");
+            return;
+          }
+          const lineData = this.resolveTimelineChartData(behavior, rows);
+          if (!lineData || !lineData.labels.length) {
+            this.showToast("Linha do Tempo sem datas ou series numericas validas para exibir.", "error");
+            return;
+          }
+          this.activeBehaviorModal = {
+            visible: true,
+            title: behavior.name || "Linha do Tempo",
+            summary: lineData.labels.length + " ponto(s), " + lineData.datasets.length + " serie(s).",
+            mapUrl: "",
+            embedUrl: "",
+            points: [],
+            kind: "line",
+            chartData: null,
+            lineChartData: lineData
+          };
+          this.$nextTick(() => this.renderBehaviorLineChart());
           return;
         }
         if (behavior.type !== "marker") {
@@ -1706,7 +1983,8 @@
           embedUrl: urls.embedUrl,
           points: points,
           kind: "map",
-          chartData: null
+          chartData: null,
+          lineChartData: null
         };
         this.$nextTick(() => this.renderBehaviorMap());
       },

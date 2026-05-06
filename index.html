@@ -183,6 +183,7 @@
                   <select class="form-select form-select-sm" v-model="behavior.type" @change="onBehaviorTypeChanged(behavior)">
                     <option value="marker">Marker</option>
                     <option value="pieChart" :disabled="!selectedSchemaClassIsArrayItem">Grafico Pizza</option>
+                    <option value="timeline" :disabled="!selectedSchemaClassIsArrayItem">Linha do Tempo</option>
                   </select>
                   <div class="form-check form-switch m-0">
                     <input class="form-check-input" type="checkbox" v-model="behavior.enabled" :id="'bhv-enabled-' + behavior.id">
@@ -191,6 +192,9 @@
                 </div>
                 <div v-if="behavior.type === 'pieChart' && !selectedSchemaClassIsArrayItem" class="small text-warning mb-2">
                   Grafico Pizza so pode ser aplicado em classes de lista (array).
+                </div>
+                <div v-if="behavior.type === 'timeline' && !selectedSchemaClassIsArrayItem" class="small text-warning mb-2">
+                  Linha do Tempo so pode ser aplicada em classes de lista (array).
                 </div>
                 <div v-if="behavior.type === 'marker'" class="row g-2">
                   <div class="col-6">
@@ -226,6 +230,28 @@
                       <option v-for="prop in (selectedSchemaClassInfo ? selectedSchemaClassInfo.properties : [])"
                         :key="'val-' + behavior.id + '-' + prop.name" :value="prop.name">{{ prop.name }}</option>
                     </select>
+                  </div>
+                </div>
+                <div v-if="behavior.type === 'timeline'" class="mb-2">
+                  <label class="small text-secondary mb-1 d-block">Eixo X (data)</label>
+                  <select class="form-select form-select-sm mb-2" v-model="behavior.config.timelineXProperty"
+                    @change="onTimelineXPropertyChanged(behavior)">
+                    <option value="">Selecione coluna de data</option>
+                    <option v-for="prop in schemaTimelineXPropertyOptions" :key="'tlx-' + behavior.id + '-' + prop.name"
+                      :value="prop.name">{{ prop.dateLike ? prop.name + ' (data)' : prop.name }}</option>
+                  </select>
+                  <label class="small text-secondary mb-1 d-block">Eixo Y (series numericas, uma ou mais)</label>
+                  <div class="rules-timeline-y-checks border rounded px-2 py-1" style="max-height: 9rem; overflow: auto;">
+                    <label v-for="prop in timelineYOptionsExcludingX(behavior)" :key="'tly-' + behavior.id + '-' + prop.name"
+                      class="d-flex align-items-center gap-2 small mb-1 cursor-pointer">
+                      <input class="form-check-input m-0 flex-shrink-0" type="checkbox" :value="prop.name"
+                        v-model="behavior.config.timelineYProperties">
+                      <span>{{ prop.name }}</span>
+                      <span class="text-secondary">({{ prop.types.join(', ') }})</span>
+                    </label>
+                    <div v-if="!timelineYOptionsExcludingX(behavior).length" class="small text-secondary py-1">
+                      Nenhuma coluna disponivel (defina o eixo X ou adicione propriedades numericas).
+                    </div>
                   </div>
                 </div>
               </div>
@@ -313,7 +339,7 @@
                   </div>
                 </div>
               </div>
-              <div v-if="!showTableView && (currentNodeBehaviors.length || currentTableMarkerBehaviors.length || currentTablePieBehaviors.length)"
+              <div v-if="!showTableView && (currentNodeBehaviors.length || currentTableMarkerBehaviors.length || currentTablePieBehaviors.length || currentTableTimelineBehaviors.length)"
                 class="d-flex flex-wrap gap-2 mb-2 flex-shrink-0">
                 <button v-for="behavior in currentNodeBehaviors" :key="'tree-behavior-' + behavior.id" type="button"
                   class="btn btn-sm btn-outline-info" @click="executeBehaviorOnNode(behavior, currentNode)">
@@ -328,6 +354,11 @@
                   class="btn btn-sm btn-outline-warning" @click="executeBehaviorOnCurrentTable(behavior)"
                   :title="'Abrir grafico pizza: ' + behavior.name">
                   <i class="far fa-chart-pie me-1"></i>{{ behavior.name }}
+                </button>
+                <button v-for="behavior in currentTableTimelineBehaviors" :key="'tree-list-tl-' + behavior.id" type="button"
+                  class="btn btn-sm btn-outline-primary" @click="executeBehaviorOnCurrentTable(behavior)"
+                  :title="'Abrir linha do tempo: ' + behavior.name">
+                  <i class="far fa-chart-line me-1"></i>{{ behavior.name }}
                 </button>
               </div>
 
@@ -354,6 +385,11 @@
                         class="btn btn-sm btn-outline-warning" @click="executeBehaviorOnCurrentTable(behavior)"
                         :title="'Abrir grafico pizza: ' + behavior.name">
                         <i class="far fa-chart-pie me-1"></i>{{ behavior.name }}
+                      </button>
+                      <button v-for="behavior in currentTableTimelineBehaviors" :key="'table-tl-bhv-' + behavior.id" type="button"
+                        class="btn btn-sm btn-outline-primary" @click="executeBehaviorOnCurrentTable(behavior)"
+                        :title="'Abrir linha do tempo: ' + behavior.name">
+                        <i class="far fa-chart-line me-1"></i>{{ behavior.name }}
                       </button>
                     </div>
                     <div class="table-toolbar-search flex-grow-1">
@@ -482,7 +518,7 @@
     </div>
 
     <div v-if="activeBehaviorModal.visible" class="behavior-modal-backdrop" @click.self="closeBehaviorModal">
-      <div class="behavior-modal">
+      <div class="behavior-modal" :class="{ 'behavior-modal--wide': activeBehaviorModal.kind === 'line' }">
         <div class="behavior-modal-head d-flex align-items-center justify-content-between">
           <strong>{{ activeBehaviorModal.title }}</strong>
           <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" @click="closeBehaviorModal">
@@ -491,9 +527,10 @@
         </div>
         <div class="behavior-modal-body">
           <p class="mb-3">{{ activeBehaviorModal.summary }}</p>
-          <div class="behavior-map-frame mb-3">
+          <div class="behavior-map-frame mb-3" :class="{ 'behavior-map-frame--timeline': activeBehaviorModal.kind === 'line' }">
             <div v-if="activeBehaviorModal.kind === 'map'" ref="behaviorMapEl" class="behavior-map-canvas"></div>
             <canvas v-if="activeBehaviorModal.kind === 'pie'" ref="behaviorChartEl" class="behavior-chart-canvas"></canvas>
+            <canvas v-if="activeBehaviorModal.kind === 'line'" ref="behaviorLineChartEl" class="behavior-line-chart-canvas"></canvas>
           </div>
           <button v-if="activeBehaviorModal.kind === 'map'" type="button" class="btn btn-primary btn-sm" @click="openBehaviorMapLink">
             <i class="far fa-map-marked-alt me-1"></i>Abrir no Google Maps
