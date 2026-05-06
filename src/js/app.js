@@ -56,6 +56,11 @@
             type: "marker",
             label: "Marker",
             requiredConfig: ["latitudeProperty", "longitudeProperty"]
+          },
+          pieChart: {
+            type: "pieChart",
+            label: "Grafico Pizza",
+            requiredConfig: ["groupByProperty"]
           }
         },
         activeBehaviorModal: {
@@ -64,7 +69,9 @@
           summary: "",
           mapUrl: "",
           embedUrl: "",
-          points: []
+          points: [],
+          kind: "map",
+          chartData: null
         },
         globalSettings: {
           googleMapsApiKey: ""
@@ -270,6 +277,13 @@
         }
         const list = this.behaviorRulesByClass[this.currentArrayItemClass] || [];
         return list.filter((item) => item && item.type === "marker" && item.enabled && this.behaviorHasRequiredConfig(item));
+      },
+      currentTablePieBehaviors() {
+        if (!Array.isArray(this.currentNode) || !this.currentArrayItemClass) {
+          return [];
+        }
+        const list = this.behaviorRulesByClass[this.currentArrayItemClass] || [];
+        return list.filter((item) => item && item.type === "pieChart" && item.enabled && this.behaviorHasRequiredConfig(item));
       },
       needsTableColumnWidthInit() {
         if (!this.showTableView || !this.tableColumnKeys.length) {
@@ -755,7 +769,10 @@
                 type: item.type,
                 name: item.name || (this.behaviorCatalog[item.type] ? this.behaviorCatalog[item.type].label : "Comportamento"),
                 enabled: item.enabled !== false,
-                config: Object.assign({ latitudeProperty: "", longitudeProperty: "" }, item.config || {})
+                config: Object.assign(
+                  { latitudeProperty: "", longitudeProperty: "", groupByProperty: "", valueProperty: "" },
+                  item.config || {}
+                )
               };
               if (normalized.type === "marker") {
                 if (!allowed[className][normalized.config.latitudeProperty]) {
@@ -763,6 +780,14 @@
                 }
                 if (!allowed[className][normalized.config.longitudeProperty]) {
                   normalized.config.longitudeProperty = "";
+                }
+              }
+              if (normalized.type === "pieChart") {
+                if (!allowed[className][normalized.config.groupByProperty]) {
+                  normalized.config.groupByProperty = "";
+                }
+                if (normalized.config.valueProperty && !allowed[className][normalized.config.valueProperty]) {
+                  normalized.config.valueProperty = "";
                 }
               }
               return normalized;
@@ -839,7 +864,11 @@
           visible: false,
           title: "",
           summary: "",
-          mapUrl: ""
+          mapUrl: "",
+          embedUrl: "",
+          points: [],
+          kind: "map",
+          chartData: null
         };
         this.selectedSchemaClass = "";
         this.selectedSchemaProperty = "";
@@ -1048,7 +1077,9 @@
           enabled: true,
           config: {
             latitudeProperty: "",
-            longitudeProperty: ""
+            longitudeProperty: "",
+            groupByProperty: "",
+            valueProperty: ""
           }
         };
       },
@@ -1083,7 +1114,10 @@
                 type: item.type,
                 name: item.name || (this.behaviorCatalog[item.type] ? this.behaviorCatalog[item.type].label : "Comportamento"),
                 enabled: item.enabled !== false,
-                config: Object.assign({ latitudeProperty: "", longitudeProperty: "" }, item.config || {})
+                config: Object.assign(
+                  { latitudeProperty: "", longitudeProperty: "", groupByProperty: "", valueProperty: "" },
+                  item.config || {}
+                )
               };
             });
         });
@@ -1091,8 +1125,13 @@
       },
       behaviorHasRequiredConfig(behavior) {
         if (!behavior || !behavior.type) return false;
-        if (behavior.type !== "marker") return false;
-        return !!(behavior.config && behavior.config.latitudeProperty && behavior.config.longitudeProperty);
+        if (behavior.type === "marker") {
+          return !!(behavior.config && behavior.config.latitudeProperty && behavior.config.longitudeProperty);
+        }
+        if (behavior.type === "pieChart") {
+          return !!(behavior.config && behavior.config.groupByProperty);
+        }
+        return false;
       },
       isBehaviorEnabledForNode(behavior, nodeValue) {
         if (!behavior || !behavior.enabled || !this.behaviorHasRequiredConfig(behavior)) {
@@ -1100,6 +1139,9 @@
         }
         if (behavior.type === "marker") {
           return nodeValue && typeof nodeValue === "object" && !Array.isArray(nodeValue);
+        }
+        if (behavior.type === "pieChart") {
+          return false;
         }
         return false;
       },
@@ -1135,7 +1177,9 @@
             summary: "Latitude: " + coords.lat + " | Longitude: " + coords.lng,
             mapUrl: "https://www.google.com/maps?q=" + encodeURIComponent(coords.lat + "," + coords.lng),
             embedUrl: this.buildGoogleMapsEmbedUrl(coords.lat, coords.lng),
-            points: [coords]
+            points: [coords],
+            kind: "map",
+            chartData: null
           };
           this.$nextTick(() => this.renderBehaviorMap());
           return;
@@ -1179,7 +1223,29 @@
         return { mapUrl: mapUrl, embedUrl: embedUrl };
       },
       executeBehaviorOnCurrentTable(behavior) {
-        if (!behavior || behavior.type !== "marker" || !Array.isArray(this.currentNode)) {
+        if (!behavior || !Array.isArray(this.currentNode)) {
+          return;
+        }
+        if (behavior.type === "pieChart") {
+          const pieData = this.resolvePieChartData(behavior, this.currentNode);
+          if (!pieData || !pieData.labels.length) {
+            this.showToast("Grafico Pizza sem dados validos para exibir.", "error");
+            return;
+          }
+          this.activeBehaviorModal = {
+            visible: true,
+            title: behavior.name || "Grafico Pizza",
+            summary: pieData.labels.length + " grupo(s) encontrado(s).",
+            mapUrl: "",
+            embedUrl: "",
+            points: [],
+            kind: "pie",
+            chartData: pieData
+          };
+          this.$nextTick(() => this.renderBehaviorChart());
+          return;
+        }
+        if (behavior.type !== "marker") {
           return;
         }
         const points = [];
@@ -1204,9 +1270,46 @@
           summary: points.length + " marcador(es) conectados em sequencia.",
           mapUrl: urls.mapUrl,
           embedUrl: urls.embedUrl,
-          points: points
+          points: points,
+          kind: "map",
+          chartData: null
         };
         this.$nextTick(() => this.renderBehaviorMap());
+      },
+      resolvePieChartData(behavior, rows) {
+        if (!behavior || !behavior.config || !behavior.config.groupByProperty) {
+          return null;
+        }
+        const groupProp = behavior.config.groupByProperty;
+        const valueProp = behavior.config.valueProperty || "";
+        const grouped = {};
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || typeof row !== "object" || Array.isArray(row)) {
+            continue;
+          }
+          const labelRaw = row[groupProp];
+          const label = labelRaw == null || labelRaw === "" ? "(vazio)" : String(labelRaw);
+          if (!Object.prototype.hasOwnProperty.call(grouped, label)) {
+            grouped[label] = 0;
+          }
+          if (!valueProp) {
+            grouped[label] += 1;
+          } else {
+            const n = Number(row[valueProp]);
+            if (isFinite(n)) {
+              grouped[label] += n;
+            }
+          }
+        }
+        const labels = Object.keys(grouped);
+        if (!labels.length) {
+          return null;
+        }
+        const values = labels.map((k) => grouped[k]);
+        const palette = ["#2f8bff", "#2ad39f", "#f8d26f", "#f78ca2", "#7db8ff", "#6ce5b6", "#f7b267", "#9f86ff", "#4cc9f0", "#ff6b6b"];
+        const colors = labels.map((_, idx) => palette[idx % palette.length]);
+        return { labels: labels, values: values, colors: colors };
       },
       renderBehaviorMap() {
         const L = window.L;
@@ -1235,10 +1338,47 @@
         const bounds = L.latLngBounds(latLngs);
         map.fitBounds(bounds, { padding: [18, 18], maxZoom: 16 });
       },
+      renderBehaviorChart() {
+        const Chart = window.Chart;
+        const canvas = this.$refs.behaviorChartEl;
+        const data = this.activeBehaviorModal.chartData;
+        if (!Chart || !canvas || !data || !data.labels || !data.values) {
+          return;
+        }
+        if (this._behaviorChart) {
+          this._behaviorChart.destroy();
+          this._behaviorChart = null;
+        }
+        this._behaviorChart = new Chart(canvas, {
+          type: "pie",
+          data: {
+            labels: data.labels,
+            datasets: [
+              {
+                data: data.values,
+                backgroundColor: data.colors
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: "bottom"
+              }
+            }
+          }
+        });
+      },
       closeBehaviorModal() {
         if (this._behaviorLeafletMap) {
           this._behaviorLeafletMap.remove();
           this._behaviorLeafletMap = null;
+        }
+        if (this._behaviorChart) {
+          this._behaviorChart.destroy();
+          this._behaviorChart = null;
         }
         this.activeBehaviorModal.visible = false;
       },
@@ -1799,6 +1939,14 @@
       }
       if (this._toastTimer) {
         clearTimeout(this._toastTimer);
+      }
+      if (this._behaviorLeafletMap) {
+        this._behaviorLeafletMap.remove();
+        this._behaviorLeafletMap = null;
+      }
+      if (this._behaviorChart) {
+        this._behaviorChart.destroy();
+        this._behaviorChart = null;
       }
       this.dismissRowContextMenu();
       if (this._tableMeasureEl && this._tableMeasureEl.parentNode) {
