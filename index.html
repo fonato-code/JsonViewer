@@ -142,6 +142,7 @@
                   <option value="text">Texto</option>
                   <option value="number">Numero</option>
                   <option value="link">Link</option>
+                  <option value="jwt">JWT decoded</option>
                 </select>
                 <div v-if="selectedRule.displayType === 'date'">
                   <label class="small text-secondary mb-1 d-block">Formato de data</label>
@@ -510,6 +511,8 @@
                               </button>
                               <a v-else-if="p.kind === 'link'" :href="p.href" target="_blank" rel="noopener noreferrer"
                                 class="table-cell-link" :class="p.cellClass" @click.stop>{{ p.text }}</a>
+                              <button v-else-if="p.kind === 'jwt'" type="button" class="table-cell-jwt-link" :class="p.cellClass"
+                                @click.stop="openJwtDecodeModal(p.rawToken)">{{ p.text }}</button>
                               <span v-else class="table-cell-text" :class="p.cellClass">{{ p.text }}</span>
                             </template>
                           </td>
@@ -541,6 +544,7 @@
                   :behavior-resolver="treeRowBehaviors" :behavior-icon-resolver="behaviorActionIconClass"
                   @toggle="toggleExpand" @select="selectPath"
                   @run-behavior="onTreeRunBehavior($event)"
+                  @open-jwt="onTreeOpenJwt"
                   @context-menu="openTreeContextMenu($event)"></json-node>
               </div>
             </div>
@@ -625,6 +629,56 @@
             <li class="mb-0">Com o foco em campos de texto, <kbd>textarea</kbd> ou <kbd>select</kbd>, o <kbd>Esc</kbd> nao navega
               (comportamento padrao de edicao).</li>
           </ul>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="jwtDecodeModal.open" class="behavior-modal-backdrop" @click.self="closeJwtDecodeModal">
+      <div class="behavior-modal behavior-modal--wide jwt-decode-modal">
+        <div class="behavior-modal-head d-flex align-items-center justify-content-between">
+          <strong>JWT decodificado</strong>
+          <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" @click="closeJwtDecodeModal">
+            <i class="far fa-times"></i>
+          </button>
+        </div>
+        <div class="behavior-modal-body">
+          <p v-if="jwtDecodeModal.error" class="text-warning small mb-3">{{ jwtDecodeModal.error }}</p>
+          <template v-else>
+            <div class="jwt-decode-section mb-3">
+              <div class="jwt-decode-section-head">
+                <span class="jwt-decode-badge">JSON</span>
+                <span class="small text-secondary fw-semibold">Header</span>
+                <button type="button" class="btn btn-xs btn-outline-secondary ms-auto" title="Copiar"
+                  @click="copyTextToClipboard(jwtDecodeModal.headerText, 'Header copiado.')">
+                  <i class="far fa-copy"></i>
+                </button>
+              </div>
+              <pre class="jwt-decode-pre"><code>{{ jwtDecodeModal.headerText }}</code></pre>
+            </div>
+            <div class="jwt-decode-section mb-3">
+              <div class="jwt-decode-section-head">
+                <span class="jwt-decode-badge">JSON</span>
+                <span class="small text-secondary fw-semibold">Payload (claims)</span>
+                <button type="button" class="btn btn-xs btn-outline-secondary ms-auto" title="Copiar"
+                  @click="copyTextToClipboard(jwtDecodeModal.payloadText, 'Payload copiado.')">
+                  <i class="far fa-copy"></i>
+                </button>
+              </div>
+              <pre class="jwt-decode-pre"><code>{{ jwtDecodeModal.payloadText }}</code></pre>
+            </div>
+            <div class="jwt-decode-section mb-0">
+              <div class="jwt-decode-section-head">
+                <span class="jwt-decode-badge jwt-decode-badge--sig">SIG</span>
+                <span class="small text-secondary fw-semibold">Assinatura (Base64URL)</span>
+                <button type="button" class="btn btn-xs btn-outline-secondary ms-auto" title="Copiar"
+                  @click="copyTextToClipboard(jwtDecodeModal.signaturePart, 'Assinatura copiada.')">
+                  <i class="far fa-copy"></i>
+                </button>
+              </div>
+              <pre class="jwt-decode-pre jwt-decode-pre--sig"><code>{{ jwtDecodeModal.signaturePart }}</code></pre>
+              <p class="small text-secondary mb-0 mt-2">A verificacao da assinatura com segredo ou chave publica nao esta disponivel neste visualizador.</p>
+            </div>
+          </template>
         </div>
       </div>
     </div>

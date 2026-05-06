@@ -97,6 +97,13 @@
           open: false,
           name: ""
         },
+        jwtDecodeModal: {
+          open: false,
+          error: "",
+          headerText: "",
+          payloadText: "",
+          signaturePart: ""
+        },
         gotoPathInput: "",
         globalSearchInput: "",
         globalSearchResults: [],
@@ -781,7 +788,7 @@
           const num = Number(value);
           return isFinite(num) ? String(num) : null;
         }
-        if (rule.displayType === "link") {
+        if (rule.displayType === "link" || rule.displayType === "jwt") {
           if (value == null) return null;
           const t = String(value).trim();
           return t ? t : null;
@@ -842,7 +849,20 @@
           return null;
         }
         const rule = this.getRule(ctx.className, ctx.propertyName);
-        if (!rule || !rule.enabled || rule.displayType !== "link") {
+        if (!rule || !rule.enabled) {
+          return null;
+        }
+        if (rule.displayType === "jwt") {
+          const raw = String(value).trim();
+          if (!raw || !this.isLikelyJwtTokenString(raw)) {
+            return null;
+          }
+          const transformed = this.formatByRule(value, ctx);
+          const label =
+            transformed != null && transformed !== "" ? transformed : raw.length > 48 ? raw.slice(0, 45) + "…" : raw;
+          return { kind: "jwt", rawToken: raw, label: label };
+        }
+        if (rule.displayType !== "link") {
           return null;
         }
         const href = this.normalizeUrlHref(value);
@@ -851,7 +871,104 @@
         }
         const transformed = this.formatByRule(value, ctx);
         const label = transformed != null && transformed !== "" ? transformed : String(value).trim();
-        return { href: href, label: label || href };
+        return { kind: "external", href: href, label: label || href };
+      },
+      decodeJwtBase64UrlSegment(segment) {
+        if (segment == null || typeof segment !== "string" || !segment.length) {
+          throw new Error("empty");
+        }
+        if (!/^[A-Za-z0-9_-]+$/.test(segment)) {
+          throw new Error("invalid");
+        }
+        let b64 = segment.replace(/-/g, "+").replace(/_/g, "/");
+        const pad = b64.length % 4 ? 4 - (b64.length % 4) : 0;
+        b64 += "=".repeat(pad);
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      },
+      isLikelyJwtTokenString(s) {
+        if (!s || typeof s !== "string") {
+          return false;
+        }
+        const t = s.trim();
+        const parts = t.split(".");
+        if (parts.length !== 3 || !parts[0] || !parts[1]) {
+          return false;
+        }
+        if (!parts.every(function (p) {
+          return p.length > 0 && /^[A-Za-z0-9_-]+$/.test(p);
+        })) {
+          return false;
+        }
+        try {
+          const headerJson = this.decodeJwtBase64UrlSegment(parts[0]);
+          const header = JSON.parse(headerJson);
+          return header && typeof header === "object" && (header.alg !== undefined || header.typ !== undefined);
+        } catch (e) {
+          return false;
+        }
+      },
+      openJwtDecodeModal(token) {
+        const t = token != null ? String(token).trim() : "";
+        if (!t) {
+          this.showToast("JWT vazio.", "error");
+          return;
+        }
+        const parts = t.split(".");
+        if (parts.length !== 3) {
+          this.jwtDecodeModal = {
+            open: true,
+            error: "Formato invalido: esperado tres partes separadas por ponto (header.payload.signature).",
+            headerText: "",
+            payloadText: "",
+            signaturePart: ""
+          };
+          return;
+        }
+        try {
+          const headerRaw = this.decodeJwtBase64UrlSegment(parts[0]);
+          const headerObj = JSON.parse(headerRaw);
+          let payloadText;
+          try {
+            const payloadRaw = this.decodeJwtBase64UrlSegment(parts[1]);
+            const payloadObj = JSON.parse(payloadRaw);
+            payloadText = JSON.stringify(payloadObj, null, 2);
+          } catch (pe) {
+            const payloadRaw = this.decodeJwtBase64UrlSegment(parts[1]);
+            payloadText = payloadRaw;
+          }
+          this.jwtDecodeModal = {
+            open: true,
+            error: "",
+            headerText: JSON.stringify(headerObj, null, 2),
+            payloadText: payloadText,
+            signaturePart: parts[2]
+          };
+        } catch (e) {
+          this.jwtDecodeModal = {
+            open: true,
+            error: "Nao foi possivel decodificar o JWT (Base64URL ou JSON invalido).",
+            headerText: "",
+            payloadText: "",
+            signaturePart: parts[2] || ""
+          };
+        }
+      },
+      closeJwtDecodeModal() {
+        this.jwtDecodeModal.open = false;
+        this.jwtDecodeModal.error = "";
+        this.jwtDecodeModal.headerText = "";
+        this.jwtDecodeModal.payloadText = "";
+        this.jwtDecodeModal.signaturePart = "";
+      },
+      onTreeOpenJwt(payload) {
+        if (payload && payload.token) {
+          this.openJwtDecodeModal(payload.token);
+        }
       },
       retainOnlyCompatibleRules() {
         const allowed = {};
@@ -2157,6 +2274,28 @@
           transformed != null && transformed !== "" ? transformed : this.formatTableCell(raw);
         return { href: href, label: label || href };
       },
+      tableCellJwtMeta(item, col) {
+        const raw = this.tableCellRaw(item, col);
+        if (raw === null || typeof raw === "object") {
+          return null;
+        }
+        if (col === "__primitive" || !this.currentArrayItemClass) {
+          return null;
+        }
+        const ctx = { className: this.currentArrayItemClass, propertyName: col };
+        const rule = this.getRule(ctx.className, ctx.propertyName);
+        if (!rule || !rule.enabled || rule.displayType !== "jwt") {
+          return null;
+        }
+        const str = String(raw).trim();
+        if (!str || !this.isLikelyJwtTokenString(str)) {
+          return null;
+        }
+        const transformed = this.formatByRule(raw, ctx);
+        const baseLabel = transformed != null && transformed !== "" ? transformed : str;
+        const label = baseLabel.length > 64 ? baseLabel.slice(0, 61) + "…" : baseLabel;
+        return { rawToken: str, label: label };
+      },
       tableCellPresentation(rowMeta, col) {
         const item = rowMeta.item;
         const cellClass = this.tableCellClassDisplay(item, col);
@@ -2167,6 +2306,10 @@
             title: this.tableCellDrillTitle(item, col),
             cellClass: cellClass
           };
+        }
+        const jwt = this.tableCellJwtMeta(item, col);
+        if (jwt) {
+          return { kind: "jwt", rawToken: jwt.rawToken, text: jwt.label, cellClass: cellClass };
         }
         const link = this.tableCellLinkMeta(item, col);
         if (link) {
@@ -2959,6 +3102,11 @@
         }
         if (this.profileDeleteConfirm.open) {
           this.closeProfileDeleteConfirm();
+          e.preventDefault();
+          return;
+        }
+        if (this.jwtDecodeModal.open) {
+          this.closeJwtDecodeModal();
           e.preventDefault();
           return;
         }

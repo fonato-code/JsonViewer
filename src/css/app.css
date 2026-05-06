@@ -639,6 +639,26 @@ a.value-link:hover {
   filter: brightness(1.12);
 }
 
+.jwt-inline-link {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  line-height: inherit;
+  background: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+  color: inherit;
+  vertical-align: baseline;
+  text-align: inherit;
+}
+
+.jwt-inline-link:hover {
+  filter: brightness(1.12);
+}
+
 .crumb-area {
   border-radius: 6px;
   padding: 0.4rem 0.65rem;
@@ -1026,6 +1046,31 @@ body.theme-light .rules-behavior-block::-webkit-scrollbar-thumb {
   filter: brightness(1.12);
 }
 
+.table-cell-jwt-link {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  line-height: inherit;
+  background: transparent;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+  color: inherit;
+  text-align: left;
+}
+
+.table-cell-jwt-link:hover {
+  filter: brightness(1.12);
+}
+
 .table-cell-drill {
   display: inline-flex;
   align-items: center;
@@ -1183,6 +1228,67 @@ body.theme-light .row-context-menu {
 
 .behavior-modal--narrow {
   width: min(22rem, calc(100vw - 2rem));
+}
+
+.jwt-decode-modal .behavior-modal-body {
+  max-height: min(72vh, 38rem);
+  overflow-y: auto;
+}
+
+.jwt-decode-section {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-surface-2) 92%, transparent);
+}
+
+.jwt-decode-section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-surface) 65%, transparent);
+}
+
+.jwt-decode-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.12rem 0.38rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text-primary);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+.jwt-decode-badge--sig {
+  background: color-mix(in srgb, var(--text-secondary) 16%, transparent);
+  border-color: color-mix(in srgb, var(--border-color) 80%, var(--text-secondary));
+}
+
+.jwt-decode-pre {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  max-height: min(24vh, 15rem);
+  overflow: auto;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-surface) 50%, transparent);
+}
+
+.jwt-decode-pre code {
+  font-family: Consolas, Monaco, ui-monospace, monospace;
+  color: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.jwt-decode-pre--sig code {
+  word-break: break-all;
+  font-size: 0.72rem;
 }
 
 .behavior-modal-head {

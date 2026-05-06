@@ -70,6 +70,9 @@
       },
       emitContextMenu(ev) {
         this.$emit("context-menu", { event: ev, path: this.path, nodeKey: this.nodeKey, node: this.node });
+      },
+      emitOpenJwt(token) {
+        this.$emit("open-jwt", { token: token, path: this.path.slice() });
       }
     },
     computed: {
@@ -91,7 +94,16 @@
           return null;
         }
         const info = this.valueLinkResolver(this.path, this.node);
-        return info && info.href ? info : null;
+        if (!info) {
+          return null;
+        }
+        if (info.kind === "jwt" && info.rawToken) {
+          return info;
+        }
+        if (info.href) {
+          return Object.assign({ kind: "external" }, info);
+        }
+        return null;
       }
     },
     template: `
@@ -103,8 +115,10 @@
           <span v-else class="tree-node-toggle text-secondary"><i class="far fa-circle fa-xs"></i></span>
           <span class="key">{{ nodeKey }}</span>
           <span class="text-secondary">:</span>
-          <a v-if="valueLinkInfo" :href="valueLinkInfo.href" target="_blank" rel="noopener noreferrer" class="value-link"
-            :class="valueClass(node)" @click.stop>{{ valueLinkInfo.label }}</a>
+          <a v-if="valueLinkInfo && valueLinkInfo.kind === 'external'" :href="valueLinkInfo.href" target="_blank"
+            rel="noopener noreferrer" class="value-link" :class="valueClass(node)" @click.stop>{{ valueLinkInfo.label }}</a>
+          <button v-else-if="valueLinkInfo && valueLinkInfo.kind === 'jwt'" type="button" class="jwt-inline-link"
+            :class="valueClass(node)" @click.stop="emitOpenJwt(valueLinkInfo.rawToken)">{{ valueLinkInfo.label }}</button>
           <span v-else :class="valueClass(node)">{{ valuePreview(node) }}</span>
           <span v-if="nodeBehaviors.length" class="tree-line-actions ms-auto" @click.stop>
             <button
@@ -136,6 +150,7 @@
             @toggle="$emit('toggle', $event)"
             @select="$emit('select', $event)"
             @run-behavior="$emit('run-behavior', $event)"
+            @open-jwt="$emit('open-jwt', $event)"
             @context-menu="$emit('context-menu', $event)"
           ></json-node>
         </div>
