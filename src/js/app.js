@@ -260,6 +260,9 @@
         if (!this.selectedSchemaClass) return [];
         return this.behaviorRulesByClass[this.selectedSchemaClass] || [];
       },
+      selectedSchemaClassIsArrayItem() {
+        return this.isArrayItemClass(this.selectedSchemaClass);
+      },
       currentNodeClassName() {
         if (this.currentNode === null || typeof this.currentNode !== "object" || Array.isArray(this.currentNode)) {
           return "";
@@ -283,7 +286,14 @@
           return [];
         }
         const list = this.behaviorRulesByClass[this.currentArrayItemClass] || [];
-        return list.filter((item) => item && item.type === "pieChart" && item.enabled && this.behaviorHasRequiredConfig(item));
+        return list.filter(
+          (item) =>
+            item &&
+            item.type === "pieChart" &&
+            this.behaviorAllowedForClass(item, this.currentArrayItemClass) &&
+            item.enabled &&
+            this.behaviorHasRequiredConfig(item)
+        );
       },
       needsTableColumnWidthInit() {
         if (!this.showTableView || !this.tableColumnKeys.length) {
@@ -783,6 +793,9 @@
                 }
               }
               if (normalized.type === "pieChart") {
+                if (!this.isArrayItemClass(className)) {
+                  normalized.enabled = false;
+                }
                 if (!allowed[className][normalized.config.groupByProperty]) {
                   normalized.config.groupByProperty = "";
                 }
@@ -1067,6 +1080,18 @@
         rule.displayType = nextType;
         rule.enabled = nextType !== "auto";
       },
+      isArrayItemClass(className) {
+        if (!className) return false;
+        const values = Object.values(this.schemaModel.arrayItemClassByNormPath || {});
+        return values.indexOf(className) !== -1;
+      },
+      behaviorAllowedForClass(behavior, className) {
+        if (!behavior || !behavior.type) return false;
+        if (behavior.type === "pieChart") {
+          return this.isArrayItemClass(className);
+        }
+        return true;
+      },
       createBehaviorInstance(type) {
         const catalog = this.behaviorCatalog[type];
         if (!catalog) return null;
@@ -1092,6 +1117,21 @@
           [this.selectedSchemaClass]: current.concat([instance])
         });
         this.behaviorRulesByClass = nextByClass;
+      },
+      onBehaviorTypeChanged(behavior) {
+        if (!behavior) return;
+        if (behavior.type === "pieChart" && !this.selectedSchemaClassIsArrayItem) {
+          this.showToast("Grafico Pizza so pode ser usado em classe de lista.", "error");
+          behavior.type = "marker";
+        }
+        const catalog = this.behaviorCatalog[behavior.type];
+        if (catalog && (!behavior.name || behavior.name === "Marker" || behavior.name === "Grafico Pizza")) {
+          behavior.name = catalog.label;
+        }
+        behavior.config = Object.assign(
+          { latitudeProperty: "", longitudeProperty: "", groupByProperty: "", valueProperty: "" },
+          behavior.config || {}
+        );
       },
       removeBehaviorFromSelectedClass(behaviorId) {
         if (!this.selectedSchemaClass) return;
@@ -1227,6 +1267,10 @@
           return;
         }
         if (behavior.type === "pieChart") {
+          if (!this.behaviorAllowedForClass(behavior, this.currentArrayItemClass)) {
+            this.showToast("Grafico Pizza disponivel apenas para niveis de lista.", "error");
+            return;
+          }
           const pieData = this.resolvePieChartData(behavior, this.currentNode);
           if (!pieData || !pieData.labels.length) {
             this.showToast("Grafico Pizza sem dados validos para exibir.", "error");
