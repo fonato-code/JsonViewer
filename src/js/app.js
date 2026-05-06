@@ -731,7 +731,39 @@
           const num = Number(value);
           return isFinite(num) ? String(num) : null;
         }
+        if (rule.displayType === "link") {
+          if (value == null) return null;
+          const t = String(value).trim();
+          return t ? t : null;
+        }
         return null;
+      },
+      normalizeUrlHref(value) {
+        if (value == null) {
+          return "";
+        }
+        const s = String(value).trim();
+        if (!s) {
+          return "";
+        }
+        if (/^(https?|mailto):/i.test(s)) {
+          return s;
+        }
+        if (/^\/\//.test(s)) {
+          return "https:" + s;
+        }
+        if (/^www\./i.test(s)) {
+          return "https://" + s;
+        }
+        try {
+          return new URL(s).href;
+        } catch (e1) {
+          try {
+            return new URL("https://" + s).href;
+          } catch (e2) {
+            return "";
+          }
+        }
       },
       treeValuePreview(path, value) {
         if (Array.isArray(value)) return "[" + value.length + "]";
@@ -750,6 +782,26 @@
         if (typeof finalValue === "boolean") return "value-bool";
         if (finalValue === null) return "value-null";
         return "";
+      },
+      treeValueLink(path, value) {
+        if (value !== null && typeof value === "object") {
+          return null;
+        }
+        const ctx = this.ruleContextFromPath(path);
+        if (!ctx) {
+          return null;
+        }
+        const rule = this.getRule(ctx.className, ctx.propertyName);
+        if (!rule || !rule.enabled || rule.displayType !== "link") {
+          return null;
+        }
+        const href = this.normalizeUrlHref(value);
+        if (!href) {
+          return null;
+        }
+        const transformed = this.formatByRule(value, ctx);
+        const label = transformed != null && transformed !== "" ? transformed : String(value).trim();
+        return { href: href, label: label || href };
       },
       retainOnlyCompatibleRules() {
         const allowed = {};
@@ -1740,6 +1792,45 @@
         }
         const transformed = this.formatByRule(raw, ctx);
         return this.formatTableCell(transformed != null ? transformed : raw);
+      },
+      tableCellLinkMeta(item, col) {
+        const raw = this.tableCellRaw(item, col);
+        if (raw === null || typeof raw === "object") {
+          return null;
+        }
+        if (col === "__primitive" || !this.currentArrayItemClass) {
+          return null;
+        }
+        const ctx = { className: this.currentArrayItemClass, propertyName: col };
+        const rule = this.getRule(ctx.className, ctx.propertyName);
+        if (!rule || !rule.enabled || rule.displayType !== "link") {
+          return null;
+        }
+        const href = this.normalizeUrlHref(raw);
+        if (!href) {
+          return null;
+        }
+        const transformed = this.formatByRule(raw, ctx);
+        const label =
+          transformed != null && transformed !== "" ? transformed : this.formatTableCell(raw);
+        return { href: href, label: label || href };
+      },
+      tableCellPresentation(rowMeta, col) {
+        const item = rowMeta.item;
+        const cellClass = this.tableCellClassDisplay(item, col);
+        if (this.isTableCellDrillable(item, col)) {
+          return {
+            kind: "drill",
+            text: this.formatTableCellDisplay(item, col),
+            title: this.tableCellDrillTitle(item, col),
+            cellClass: cellClass
+          };
+        }
+        const link = this.tableCellLinkMeta(item, col);
+        if (link) {
+          return { kind: "link", href: link.href, text: link.label, cellClass: cellClass };
+        }
+        return { kind: "text", text: this.formatTableCellDisplay(item, col), cellClass: cellClass };
       },
       tableCellClass(val) {
         if (typeof val === "string") {

@@ -135,6 +135,7 @@
                   <option value="date">Data</option>
                   <option value="text">Texto</option>
                   <option value="number">Numero</option>
+                  <option value="link">Link</option>
                 </select>
                 <div v-if="selectedRule.displayType === 'date'">
                   <label class="small text-secondary mb-1 d-block">Formato de data</label>
@@ -411,16 +412,18 @@
                             </div>
                           </td>
                           <td v-for="col in tableColumnKeys" :key="'c-' + rowMeta.index + '-' + col" class="table-data-cell">
-                            <button v-if="isTableCellDrillable(rowMeta.item, col)" type="button"
-                              class="table-cell-drill"
-                              :class="tableCellClassDisplay(rowMeta.item, col)"
-                              :title="tableCellDrillTitle(rowMeta.item, col)"
-                              @click="drillTableCell(rowMeta, col)">
-                              {{ formatTableCellDisplay(rowMeta.item, col) }}
-                            </button>
-                            <span v-else class="table-cell-text" :class="tableCellClassDisplay(rowMeta.item, col)">
-                              {{ formatTableCellDisplay(rowMeta.item, col) }}
-                            </span>
+                            <template v-for="p in [tableCellPresentation(rowMeta, col)]" :key="'pc-' + rowMeta.index + '-' + col">
+                              <button v-if="p.kind === 'drill'" type="button"
+                                class="table-cell-drill"
+                                :class="p.cellClass"
+                                :title="p.title"
+                                @click="drillTableCell(rowMeta, col)">
+                                {{ p.text }}
+                              </button>
+                              <a v-else-if="p.kind === 'link'" :href="p.href" target="_blank" rel="noopener noreferrer"
+                                class="table-cell-link" :class="p.cellClass" @click.stop>{{ p.text }}</a>
+                              <span v-else class="table-cell-text" :class="p.cellClass">{{ p.text }}</span>
+                            </template>
                           </td>
                         </tr>
                       </tbody>
@@ -446,6 +449,7 @@
                 <json-node :node="currentNode" :node-key="currentNodeLabel" :path="selectedPath"
                   :expanded-state="expandedState" :active-path="selectedPath"
                   :value-preview-resolver="treeValuePreview" :value-class-resolver="treeValueClass"
+                  :value-link-resolver="treeValueLink"
                   :behavior-resolver="treeRowBehaviors" :behavior-icon-resolver="behaviorActionIconClass"
                   @toggle="toggleExpand" @select="selectPath"
                   @run-behavior="onTreeRunBehavior($event)"

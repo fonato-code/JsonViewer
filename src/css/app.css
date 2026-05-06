@@ -579,6 +579,16 @@ body.theme-dark .rules-sidebar .input-group-text {
   font-style: italic;
 }
 
+a.value-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+
+a.value-link:hover {
+  filter: brightness(1.12);
+}
+
 .crumb-area {
   border-radius: 6px;
   padding: 0.4rem 0.65rem;
@@ -947,6 +957,27 @@ body.theme-light .rules-behavior-block::-webkit-scrollbar-thumb {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+.table-cell-link {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.table-cell-link:hover {
+  filter: brightness(1.1);
+}
+
+body.theme-light .table-cell-link {
+  color: #0d6efd;
 }
 
 .table-cell-drill {

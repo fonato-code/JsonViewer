@@ -9,6 +9,7 @@
       activePath: { type: Array, required: true },
       valuePreviewResolver: { type: Function, default: null },
       valueClassResolver: { type: Function, default: null },
+      valueLinkResolver: { type: Function, default: null },
       behaviorResolver: { type: Function, default: null },
       behaviorIconResolver: { type: Function, default: null }
     },
@@ -81,6 +82,16 @@
         }
         const list = this.behaviorResolver(this.path, this.node);
         return Array.isArray(list) ? list : [];
+      },
+      valueLinkInfo() {
+        if (this.isContainer) {
+          return null;
+        }
+        if (typeof this.valueLinkResolver !== "function") {
+          return null;
+        }
+        const info = this.valueLinkResolver(this.path, this.node);
+        return info && info.href ? info : null;
       }
     },
     template: `
@@ -92,7 +103,9 @@
           <span v-else class="tree-node-toggle text-secondary"><i class="far fa-circle fa-xs"></i></span>
           <span class="key">{{ nodeKey }}</span>
           <span class="text-secondary">:</span>
-          <span :class="valueClass(node)">{{ valuePreview(node) }}</span>
+          <a v-if="valueLinkInfo" :href="valueLinkInfo.href" target="_blank" rel="noopener noreferrer" class="value-link"
+            :class="valueClass(node)" @click.stop>{{ valueLinkInfo.label }}</a>
+          <span v-else :class="valueClass(node)">{{ valuePreview(node) }}</span>
           <span v-if="nodeBehaviors.length" class="tree-line-actions ms-auto" @click.stop>
             <button
               v-for="behavior in nodeBehaviors"
@@ -117,6 +130,7 @@
             :active-path="activePath"
             :value-preview-resolver="valuePreviewResolver"
             :value-class-resolver="valueClassResolver"
+            :value-link-resolver="valueLinkResolver"
             :behavior-resolver="behaviorResolver"
             :behavior-icon-resolver="behaviorIconResolver"
             @toggle="$emit('toggle', $event)"
