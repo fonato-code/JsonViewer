@@ -11,6 +11,7 @@
         rootData: null,
         selectedPath: [],
         expandedState: {},
+        userTreeExpandedPaths: {},
         inputPanelCollapsed: false,
         tableViewEnabled: false,
         tablePageSize: 10,
@@ -233,6 +234,7 @@
           this.rootData = parsed;
           this.selectedPath = [];
           this.expandedState = { "[]": true };
+          this.userTreeExpandedPaths = {};
           this.inputPanelCollapsed = true;
           this.tableColumnWidths = {};
           const self = this;
@@ -252,6 +254,7 @@
         this.rootData = null;
         this.selectedPath = [];
         this.expandedState = {};
+        this.userTreeExpandedPaths = {};
         this.inputPanelCollapsed = false;
         this.tableViewEnabled = false;
         this.tablePage = 1;
@@ -292,23 +295,79 @@
       },
       selectPath(path) {
         this.dismissRowContextMenu();
-        this.selectedPath = path.slice();
+        const oldPath = this.selectedPath.slice();
+        const newPath = path.slice();
+        this.selectedPath = newPath;
         this.ensurePathExpanded(path);
+        this.collapseAutoExpandedArraysLeaving(oldPath, newPath);
       },
       navigateToParent() {
         if (this.selectedPath.length === 0) return;
         this.dismissRowContextMenu();
+        const oldPath = this.selectedPath.slice();
         this.selectedPath = this.selectedPath.slice(0, -1);
         this.ensurePathExpanded(this.selectedPath);
+        this.collapseAutoExpandedArraysLeaving(oldPath, this.selectedPath);
       },
       navigateToPath(path) {
         this.dismissRowContextMenu();
-        this.selectedPath = path.slice();
-        this.ensurePathExpanded(path);
+        const oldPath = this.selectedPath.slice();
+        const newPath = path.slice();
+        this.selectedPath = newPath;
+        this.ensurePathExpanded(newPath);
+        this.collapseAutoExpandedArraysLeaving(oldPath, newPath);
+      },
+      pathIsPrefix(prefix, full) {
+        if (prefix.length > full.length) {
+          return false;
+        }
+        for (let i = 0; i < prefix.length; i++) {
+          if (prefix[i] !== full[i]) {
+            return false;
+          }
+        }
+        return true;
+      },
+      nodeAtPath(path) {
+        if (this.rootData === null) {
+          return undefined;
+        }
+        let v = this.rootData;
+        for (let i = 0; i < path.length; i++) {
+          if (v === null || typeof v !== "object") {
+            return undefined;
+          }
+          v = v[path[i]];
+        }
+        return v;
+      },
+      collapseAutoExpandedArraysLeaving(oldPath, newPath) {
+        if (!this.pathIsPrefix(newPath, oldPath) || newPath.length >= oldPath.length) {
+          return;
+        }
+        for (let j = newPath.length + 1; j <= oldPath.length; j++) {
+          const p = oldPath.slice(0, j);
+          const key = JSON.stringify(p);
+          if (this.userTreeExpandedPaths[key]) {
+            continue;
+          }
+          const node = this.nodeAtPath(p);
+          if (node !== undefined && Array.isArray(node)) {
+            this.expandedState[key] = false;
+          }
+        }
       },
       toggleExpand(path) {
         const key = JSON.stringify(path);
-        this.expandedState[key] = !this.isPathExpanded(path);
+        const next = !this.isPathExpanded(path);
+        this.expandedState[key] = next;
+        const nextUser = Object.assign({}, this.userTreeExpandedPaths);
+        if (next) {
+          nextUser[key] = true;
+        } else {
+          delete nextUser[key];
+        }
+        this.userTreeExpandedPaths = nextUser;
       },
       isPathExpanded(path) {
         const key = JSON.stringify(path);
@@ -650,6 +709,52 @@
       },
       onColResizeDblClick(e, col) {
         this.autoFitTableColumn(col);
+      },
+      escapeNavigationIgnoredTarget(target) {
+        if (!target || typeof target.closest !== "function") {
+          return false;
+        }
+        if (target.closest("textarea, select, [contenteditable='true']")) {
+          return true;
+        }
+        const input = target.closest("input");
+        if (!input) {
+          return false;
+        }
+        const type = (input.getAttribute("type") || "text").toLowerCase();
+        const nonTextTypes = [
+          "button",
+          "checkbox",
+          "radio",
+          "submit",
+          "reset",
+          "file",
+          "hidden",
+          "range",
+          "color"
+        ];
+        return nonTextTypes.indexOf(type) === -1;
+      },
+      onGlobalEscapeKeydown(e) {
+        if (e.key !== "Escape") {
+          return;
+        }
+        if (this.escapeNavigationIgnoredTarget(e.target)) {
+          return;
+        }
+        if (this.rootData === null) {
+          return;
+        }
+        if (this.rowContextMenu.visible) {
+          this.dismissRowContextMenu();
+          e.preventDefault();
+          return;
+        }
+        if (this.selectedPath.length === 0) {
+          return;
+        }
+        this.navigateToParent();
+        e.preventDefault();
       }
     },
     mounted() {
@@ -662,8 +767,15 @@
         }
         self.dismissRowContextMenu();
       };
+      this._boundEscapeNav = function (ev) {
+        self.onGlobalEscapeKeydown(ev);
+      };
+      document.addEventListener("keydown", this._boundEscapeNav);
     },
     beforeUnmount() {
+      if (this._boundEscapeNav) {
+        document.removeEventListener("keydown", this._boundEscapeNav);
+      }
       this.dismissRowContextMenu();
       if (this._tableMeasureEl && this._tableMeasureEl.parentNode) {
         this._tableMeasureEl.parentNode.removeChild(this._tableMeasureEl);
