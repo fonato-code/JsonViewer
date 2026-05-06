@@ -104,11 +104,17 @@
                   </button>
                 </div>
               </div>
-              <div v-if="savedProfiles.length" class="mt-2 d-flex flex-wrap gap-1">
-                <button v-for="profile in savedProfiles" :key="'pf-' + profile.name" type="button"
-                  class="btn btn-xs btn-outline-dark" @click="applyProfile(profile.name)">
-                  {{ profile.name }}
-                </button>
+              <div v-if="savedProfiles.length" class="mt-2 d-flex flex-wrap gap-1 align-items-center">
+                <div v-for="profile in savedProfiles" :key="'pf-' + profile.name" class="profile-chip d-inline-flex align-items-stretch">
+                  <button type="button" class="profile-chip-apply btn btn-xs btn-outline-dark" @click="applyProfile(profile.name)"
+                    :title="'Aplicar perfil ' + profile.name">
+                    {{ profile.name }}
+                  </button>
+                  <button type="button" class="profile-chip-remove btn btn-xs btn-outline-danger" @click.stop="deleteProfile(profile.name)"
+                    title="Excluir perfil" :aria-label="'Excluir perfil ' + profile.name">
+                    <i class="far fa-times"></i>
+                  </button>
+                </div>
               </div>
             </div>
             <div class="rules-class-block p-3 border-bottom">

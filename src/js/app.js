@@ -2613,6 +2613,7 @@
       deleteProfile(profileName) {
         this.savedProfiles = this.savedProfiles.filter((p) => p.name !== profileName);
         this.persistProfilesToStorage();
+        this.showToast('Perfil "' + profileName + '" removido.');
       },
       escapeNavigationIgnoredTarget(target) {
         if (!target || typeof target.closest !== "function") {

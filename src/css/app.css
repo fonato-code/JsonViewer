@@ -389,6 +389,38 @@ body.theme-dark .rules-sidebar .input-group-text {
   border-color: var(--border-color);
 }
 
+.profile-chip {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-surface-2) 85%, transparent);
+}
+
+.profile-chip-apply {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-radius: 0;
+  border: 0;
+  border-right: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.profile-chip-remove {
+  flex: 0 0 auto;
+  border-radius: 0;
+  border: 0;
+  padding: 0.12rem 0.4rem;
+  line-height: 1;
+}
+
+.profile-chip-remove:hover {
+  filter: brightness(1.15);
+}
+
+body.theme-light .profile-chip {
+  background: color-mix(in srgb, #ffffff 92%, var(--bg-surface-2));
+}
+
 .rules-property-list {
   min-height: 8rem;
   max-height: 16rem;
