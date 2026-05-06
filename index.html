@@ -155,6 +155,52 @@
                 </div>
               </div>
             </div>
+            <div class="rules-behavior-block p-3 border-top">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <label class="small text-secondary mb-0">Comportamentos da classe</label>
+                <button type="button" class="btn btn-xs btn-outline-primary" @click="addBehaviorToSelectedClass('marker')">
+                  <i class="far fa-plus me-1"></i> Marker
+                </button>
+              </div>
+              <div v-if="!selectedClassBehaviors.length" class="small text-secondary">
+                Nenhum comportamento nesta classe.
+              </div>
+              <div v-for="behavior in selectedClassBehaviors" :key="behavior.id" class="behavior-card mb-2 p-2">
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                  <input type="text" class="form-control form-control-sm" v-model.trim="behavior.name" placeholder="Nome da acao">
+                  <button type="button" class="btn btn-xs btn-outline-danger" @click="removeBehaviorFromSelectedClass(behavior.id)">
+                    <i class="far fa-trash"></i>
+                  </button>
+                </div>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <select class="form-select form-select-sm" v-model="behavior.type" disabled>
+                    <option value="marker">Marker</option>
+                  </select>
+                  <div class="form-check form-switch m-0">
+                    <input class="form-check-input" type="checkbox" v-model="behavior.enabled" :id="'bhv-enabled-' + behavior.id">
+                    <label class="form-check-label small text-secondary" :for="'bhv-enabled-' + behavior.id">Ativo</label>
+                  </div>
+                </div>
+                <div v-if="behavior.type === 'marker'" class="row g-2">
+                  <div class="col-6">
+                    <label class="small text-secondary mb-1 d-block">Latitude</label>
+                    <select class="form-select form-select-sm" v-model="behavior.config.latitudeProperty">
+                      <option value="">Selecione</option>
+                      <option v-for="prop in (selectedSchemaClassInfo ? selectedSchemaClassInfo.properties : [])"
+                        :key="'lat-' + behavior.id + '-' + prop.name" :value="prop.name">{{ prop.name }}</option>
+                    </select>
+                  </div>
+                  <div class="col-6">
+                    <label class="small text-secondary mb-1 d-block">Longitude</label>
+                    <select class="form-select form-select-sm" v-model="behavior.config.longitudeProperty">
+                      <option value="">Selecione</option>
+                      <option v-for="prop in (selectedSchemaClassInfo ? selectedSchemaClassInfo.properties : [])"
+                        :key="'lng-' + behavior.id + '-' + prop.name" :value="prop.name">{{ prop.name }}</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
           </template>
         </div>
       </div>
@@ -238,6 +284,12 @@
                   </div>
                 </div>
               </div>
+              <div v-if="!showTableView && currentNodeBehaviors.length" class="d-flex flex-wrap gap-2 mb-2 flex-shrink-0">
+                <button v-for="behavior in currentNodeBehaviors" :key="'tree-behavior-' + behavior.id" type="button"
+                  class="btn btn-sm btn-outline-info" @click="executeBehaviorOnNode(behavior, currentNode)">
+                  <i class="far fa-bolt me-1"></i>{{ behavior.name }}
+                </button>
+              </div>
 
               <div v-if="showTableView" class="table-view-wrap flex-grow-1 min-h-0 d-flex flex-column">
                 <div v-if="currentNode.length === 0" class="state-box py-4 mb-0 flex-shrink-0">
@@ -299,7 +351,16 @@
                         <tr v-for="(rowMeta, rIdx) in tablePagedRows" :key="'row-' + rowMeta.index + '-' + rIdx"
                           class="table-data-row"
                           @contextmenu.prevent="openRowContextMenu($event, rowMeta.item)">
-                          <td class="text-secondary small table-col-idx">{{ (tablePage - 1) * tablePageSize + rIdx + 1 }}</td>
+                          <td class="text-secondary small table-col-idx">
+                            <div class="d-flex align-items-center justify-content-end gap-1">
+                              <span>{{ (tablePage - 1) * tablePageSize + rIdx + 1 }}</span>
+                              <button v-for="behavior in tableRowBehaviors(rowMeta.item)" :key="'row-bhv-' + rowMeta.index + '-' + behavior.id"
+                                type="button" class="btn btn-xs btn-outline-info table-row-behavior-btn"
+                                @click="executeBehaviorOnNode(behavior, rowMeta.item)" :title="behavior.name">
+                                <i class="far fa-map-marker-alt"></i>
+                              </button>
+                            </div>
+                          </td>
                           <td v-for="col in tableColumnKeys" :key="'c-' + rowMeta.index + '-' + col" class="table-data-cell">
                             <button v-if="isTableCellDrillable(rowMeta.item, col)" type="button"
                               class="table-cell-drill"
@@ -355,9 +416,26 @@
       </button>
     </div>
 
+    <div v-if="activeBehaviorModal.visible" class="behavior-modal-backdrop" @click.self="closeBehaviorModal">
+      <div class="behavior-modal">
+        <div class="behavior-modal-head d-flex align-items-center justify-content-between">
+          <strong>{{ activeBehaviorModal.title }}</strong>
+          <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" @click="closeBehaviorModal">
+            <i class="far fa-times"></i>
+          </button>
+        </div>
+        <div class="behavior-modal-body">
+          <p class="mb-3">{{ activeBehaviorModal.summary }}</p>
+          <button type="button" class="btn btn-primary btn-sm" @click="openBehaviorMapLink">
+            <i class="far fa-map-marked-alt me-1"></i>Abrir no Google Maps
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-show="toast.visible" class="app-toast-wrap" aria-live="polite" aria-atomic="true">
       <div class="app-toast" :class="'app-toast--' + toast.type">
-        <i class="far fa-check-circle me-2"></i>
+        <i :class="toast.type === 'error' ? 'far fa-exclamation-circle me-2' : 'far fa-check-circle me-2'"></i>
         <span>{{ toast.message }}</span>
       </div>
     </div>

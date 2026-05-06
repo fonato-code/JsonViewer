@@ -48,7 +48,21 @@
         selectedSchemaClass: "",
         selectedSchemaProperty: "",
         profileNameInput: "",
-        savedProfiles: []
+        savedProfiles: [],
+        behaviorRulesByClass: {},
+        behaviorCatalog: {
+          marker: {
+            type: "marker",
+            label: "Marker",
+            requiredConfig: ["latitudeProperty", "longitudeProperty"]
+          }
+        },
+        activeBehaviorModal: {
+          visible: false,
+          title: "",
+          summary: "",
+          mapUrl: ""
+        }
       };
     },
     computed: {
@@ -224,6 +238,21 @@
         return this.savedProfiles
           .filter((profile) => this.isProfileCompatible(profile))
           .sort((a, b) => this.profileCompatibilityScore(b) - this.profileCompatibilityScore(a));
+      },
+      selectedClassBehaviors() {
+        if (!this.selectedSchemaClass) return [];
+        return this.behaviorRulesByClass[this.selectedSchemaClass] || [];
+      },
+      currentNodeClassName() {
+        if (this.currentNode === null || typeof this.currentNode !== "object" || Array.isArray(this.currentNode)) {
+          return "";
+        }
+        return this.getClassNameForObjectPath(this.selectedPath);
+      },
+      currentNodeBehaviors() {
+        if (!this.currentNodeClassName) return [];
+        const list = this.behaviorRulesByClass[this.currentNodeClassName] || [];
+        return list.filter((item) => this.isBehaviorEnabledForNode(item, this.currentNode));
       },
       needsTableColumnWidthInit() {
         if (!this.showTableView || !this.tableColumnKeys.length) {
@@ -689,6 +718,41 @@
         });
         this.viewRules = next;
       },
+      retainOnlyCompatibleBehaviors() {
+        const allowed = {};
+        this.schemaClasses.forEach((cls) => {
+          allowed[cls.name] = {};
+          cls.properties.forEach((prop) => {
+            allowed[cls.name][prop.name] = true;
+          });
+        });
+        const next = {};
+        Object.keys(this.behaviorRulesByClass || {}).forEach((className) => {
+          if (!allowed[className]) return;
+          const list = Array.isArray(this.behaviorRulesByClass[className]) ? this.behaviorRulesByClass[className] : [];
+          next[className] = list
+            .filter((item) => item && item.type)
+            .map((item) => {
+              const normalized = {
+                id: item.id || ("bhv-" + Date.now().toString(36)),
+                type: item.type,
+                name: item.name || (this.behaviorCatalog[item.type] ? this.behaviorCatalog[item.type].label : "Comportamento"),
+                enabled: item.enabled !== false,
+                config: Object.assign({ latitudeProperty: "", longitudeProperty: "" }, item.config || {})
+              };
+              if (normalized.type === "marker") {
+                if (!allowed[className][normalized.config.latitudeProperty]) {
+                  normalized.config.latitudeProperty = "";
+                }
+                if (!allowed[className][normalized.config.longitudeProperty]) {
+                  normalized.config.longitudeProperty = "";
+                }
+              }
+              return normalized;
+            });
+        });
+        this.behaviorRulesByClass = next;
+      },
       toggleTheme() {
         this.theme = this.theme === "dark" ? "light" : "dark";
         document.body.classList.toggle("theme-dark", this.theme === "dark");
@@ -704,6 +768,7 @@
           this.transformedDraft = this.cloneJson(parsed);
           this.schemaModel = this.inferSchemaModel(parsed);
           this.retainOnlyCompatibleRules();
+          this.retainOnlyCompatibleBehaviors();
           this.selectedSchemaClass = this.schemaClasses.length ? this.schemaClasses[0].name : "";
           this.ensureSelectedProperty();
           this.selectedPath = [];
@@ -752,6 +817,13 @@
           schemaKeys: []
         };
         this.viewRules = {};
+        this.behaviorRulesByClass = {};
+        this.activeBehaviorModal = {
+          visible: false,
+          title: "",
+          summary: "",
+          mapUrl: ""
+        };
         this.selectedSchemaClass = "";
         this.selectedSchemaProperty = "";
         this.tableViewEnabled = false;
@@ -948,6 +1020,119 @@
         if (!rule) return;
         rule.displayType = nextType;
         rule.enabled = nextType !== "auto";
+      },
+      createBehaviorInstance(type) {
+        const catalog = this.behaviorCatalog[type];
+        if (!catalog) return null;
+        return {
+          id: "bhv-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8),
+          type: type,
+          name: catalog.label,
+          enabled: true,
+          config: {
+            latitudeProperty: "",
+            longitudeProperty: ""
+          }
+        };
+      },
+      addBehaviorToSelectedClass(type) {
+        if (!this.selectedSchemaClass) return;
+        const instance = this.createBehaviorInstance(type || "marker");
+        if (!instance) return;
+        const current = this.behaviorRulesByClass[this.selectedSchemaClass] || [];
+        const nextByClass = Object.assign({}, this.behaviorRulesByClass, {
+          [this.selectedSchemaClass]: current.concat([instance])
+        });
+        this.behaviorRulesByClass = nextByClass;
+      },
+      removeBehaviorFromSelectedClass(behaviorId) {
+        if (!this.selectedSchemaClass) return;
+        const current = this.behaviorRulesByClass[this.selectedSchemaClass] || [];
+        const nextList = current.filter((item) => item.id !== behaviorId);
+        this.behaviorRulesByClass = Object.assign({}, this.behaviorRulesByClass, {
+          [this.selectedSchemaClass]: nextList
+        });
+      },
+      normalizeBehaviorRules(rawRules) {
+        const src = rawRules && typeof rawRules === "object" ? rawRules : {};
+        const next = {};
+        Object.keys(src).forEach((className) => {
+          const arr = Array.isArray(src[className]) ? src[className] : [];
+          next[className] = arr
+            .filter((item) => item && typeof item === "object" && item.type)
+            .map((item, idx) => {
+              return {
+                id: item.id || ("bhv-" + className + "-" + idx),
+                type: item.type,
+                name: item.name || (this.behaviorCatalog[item.type] ? this.behaviorCatalog[item.type].label : "Comportamento"),
+                enabled: item.enabled !== false,
+                config: Object.assign({ latitudeProperty: "", longitudeProperty: "" }, item.config || {})
+              };
+            });
+        });
+        return next;
+      },
+      behaviorHasRequiredConfig(behavior) {
+        if (!behavior || !behavior.type) return false;
+        if (behavior.type !== "marker") return false;
+        return !!(behavior.config && behavior.config.latitudeProperty && behavior.config.longitudeProperty);
+      },
+      isBehaviorEnabledForNode(behavior, nodeValue) {
+        if (!behavior || !behavior.enabled || !this.behaviorHasRequiredConfig(behavior)) {
+          return false;
+        }
+        if (behavior.type === "marker") {
+          return nodeValue && typeof nodeValue === "object" && !Array.isArray(nodeValue);
+        }
+        return false;
+      },
+      resolveMarkerLatLng(behavior, nodeValue) {
+        if (!this.isBehaviorEnabledForNode(behavior, nodeValue)) {
+          return null;
+        }
+        const latRaw = nodeValue[behavior.config.latitudeProperty];
+        const lngRaw = nodeValue[behavior.config.longitudeProperty];
+        const lat = Number(latRaw);
+        const lng = Number(lngRaw);
+        if (!isFinite(lat) || !isFinite(lng)) {
+          return null;
+        }
+        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+          return null;
+        }
+        return { lat: lat, lng: lng };
+      },
+      executeBehaviorOnNode(behavior, nodeValue) {
+        if (!behavior || !behavior.type) {
+          return;
+        }
+        if (behavior.type === "marker") {
+          const coords = this.resolveMarkerLatLng(behavior, nodeValue);
+          if (!coords) {
+            this.showToast("Marker invalido: configure latitude/longitude validas.", "error");
+            return;
+          }
+          this.activeBehaviorModal = {
+            visible: true,
+            title: behavior.name || "Marker",
+            summary: "Latitude: " + coords.lat + " | Longitude: " + coords.lng,
+            mapUrl: "https://www.google.com/maps?q=" + encodeURIComponent(coords.lat + "," + coords.lng)
+          };
+          return;
+        }
+      },
+      closeBehaviorModal() {
+        this.activeBehaviorModal.visible = false;
+      },
+      openBehaviorMapLink() {
+        if (!this.activeBehaviorModal.mapUrl) return;
+        window.open(this.activeBehaviorModal.mapUrl, "_blank", "noopener,noreferrer");
+      },
+      tableRowBehaviors(rowItem) {
+        const className = this.currentArrayItemClass;
+        if (!className) return [];
+        const list = this.behaviorRulesByClass[className] || [];
+        return list.filter((item) => this.isBehaviorEnabledForNode(item, rowItem));
       },
       getCellRaw(item, col) {
         if (col === "__primitive") {
@@ -1336,6 +1521,7 @@
       normalizeProfileRules(profile) {
         const next = Object.assign({}, profile);
         const rules = this.cloneJson((profile && profile.rules) || {});
+        const behaviors = this.normalizeBehaviorRules((profile && profile.behaviors) || {});
         Object.keys(rules).forEach((className) => {
           Object.keys(rules[className] || {}).forEach((propertyName) => {
             const rule = rules[className][propertyName] || {};
@@ -1352,6 +1538,7 @@
           });
         });
         next.rules = rules;
+        next.behaviors = behaviors;
         return next;
       },
       persistProfilesToStorage() {
@@ -1373,7 +1560,8 @@
           updatedAt: now,
           schemaSignature: this.schemaModel.signature,
           schemaKeys: (this.schemaModel.schemaKeys || []).slice(),
-          rules: this.cloneJson(this.viewRules)
+          rules: this.cloneJson(this.viewRules),
+          behaviors: this.cloneJson(this.behaviorRulesByClass)
         };
         if (idx >= 0) {
           next[idx] = profile;
@@ -1389,7 +1577,9 @@
         if (!profile) return;
         const normalized = this.normalizeProfileRules(profile);
         this.viewRules = this.cloneJson(normalized.rules || {});
+        this.behaviorRulesByClass = this.cloneJson(normalized.behaviors || {});
         this.retainOnlyCompatibleRules();
+        this.retainOnlyCompatibleBehaviors();
       },
       deleteProfile(profileName) {
         this.savedProfiles = this.savedProfiles.filter((p) => p.name !== profileName);
