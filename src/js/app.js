@@ -1,5 +1,6 @@
 (function () {
   const PROFILE_STORAGE_KEY = "jsonViewer.classProfiles.v1";
+  const GLOBAL_SETTINGS_KEY = "jsonViewer.globalSettings.v1";
 
   const app = Vue.createApp({
     components: {
@@ -61,7 +62,16 @@
           visible: false,
           title: "",
           summary: "",
-          mapUrl: ""
+          mapUrl: "",
+          embedUrl: "",
+          points: []
+        },
+        globalSettings: {
+          googleMapsApiKey: ""
+        },
+        globalSettingsModalOpen: false,
+        globalSettingsDraft: {
+          googleMapsApiKey: ""
         }
       };
     },
@@ -253,6 +263,13 @@
         if (!this.currentNodeClassName) return [];
         const list = this.behaviorRulesByClass[this.currentNodeClassName] || [];
         return list.filter((item) => this.isBehaviorEnabledForNode(item, this.currentNode));
+      },
+      currentTableMarkerBehaviors() {
+        if (!Array.isArray(this.currentNode) || !this.currentArrayItemClass) {
+          return [];
+        }
+        const list = this.behaviorRulesByClass[this.currentArrayItemClass] || [];
+        return list.filter((item) => item && item.type === "marker" && item.enabled && this.behaviorHasRequiredConfig(item));
       },
       needsTableColumnWidthInit() {
         if (!this.showTableView || !this.tableColumnKeys.length) {
@@ -1116,17 +1133,154 @@
             visible: true,
             title: behavior.name || "Marker",
             summary: "Latitude: " + coords.lat + " | Longitude: " + coords.lng,
-            mapUrl: "https://www.google.com/maps?q=" + encodeURIComponent(coords.lat + "," + coords.lng)
+            mapUrl: "https://www.google.com/maps?q=" + encodeURIComponent(coords.lat + "," + coords.lng),
+            embedUrl: this.buildGoogleMapsEmbedUrl(coords.lat, coords.lng),
+            points: [coords]
           };
+          this.$nextTick(() => this.renderBehaviorMap());
           return;
         }
       },
+      buildGoogleMapsEmbedUrl(lat, lng) {
+        const coords = lat + "," + lng;
+        return "https://maps.google.com/maps?q=" + encodeURIComponent(coords) + "&z=16&output=embed";
+      },
+      buildGoogleMapsListUrls(coordsList) {
+        if (!coordsList.length) {
+          return { mapUrl: "", embedUrl: "" };
+        }
+        if (coordsList.length === 1) {
+          const single = coordsList[0].lat + "," + coordsList[0].lng;
+          return {
+            mapUrl: "https://www.google.com/maps?q=" + encodeURIComponent(single),
+            embedUrl: "https://maps.google.com/maps?q=" + encodeURIComponent(single) + "&z=16&output=embed"
+          };
+        }
+        const first = coordsList[0].lat + "," + coordsList[0].lng;
+        const chain = coordsList
+          .slice(1)
+          .map((pt) => pt.lat + "," + pt.lng)
+          .join("+to:");
+        const mapUrl =
+          "https://www.google.com/maps/dir/?api=1&origin=" +
+          encodeURIComponent(first) +
+          "&destination=" +
+          encodeURIComponent(coordsList[coordsList.length - 1].lat + "," + coordsList[coordsList.length - 1].lng) +
+          (coordsList.length > 2
+            ? "&waypoints=" +
+              encodeURIComponent(
+                coordsList
+                  .slice(1, -1)
+                  .map((pt) => pt.lat + "," + pt.lng)
+                  .join("|")
+              )
+            : "");
+        const embedUrl = "https://maps.google.com/maps?output=embed&saddr=" + encodeURIComponent(first) + "&daddr=" + encodeURIComponent(chain);
+        return { mapUrl: mapUrl, embedUrl: embedUrl };
+      },
+      executeBehaviorOnCurrentTable(behavior) {
+        if (!behavior || behavior.type !== "marker" || !Array.isArray(this.currentNode)) {
+          return;
+        }
+        const points = [];
+        for (let i = 0; i < this.currentNode.length; i++) {
+          const item = this.currentNode[i];
+          if (!item || typeof item !== "object" || Array.isArray(item)) {
+            continue;
+          }
+          const coords = this.resolveMarkerLatLng(behavior, item);
+          if (coords) {
+            points.push(coords);
+          }
+        }
+        if (!points.length) {
+          this.showToast("Nenhum marcador valido encontrado nesta lista.", "error");
+          return;
+        }
+        const urls = this.buildGoogleMapsListUrls(points);
+        this.activeBehaviorModal = {
+          visible: true,
+          title: (behavior.name || "Marker") + " (lista)",
+          summary: points.length + " marcador(es) conectados em sequencia.",
+          mapUrl: urls.mapUrl,
+          embedUrl: urls.embedUrl,
+          points: points
+        };
+        this.$nextTick(() => this.renderBehaviorMap());
+      },
+      renderBehaviorMap() {
+        const L = window.L;
+        const el = this.$refs.behaviorMapEl;
+        const points = this.activeBehaviorModal.points || [];
+        if (!el || !L || !points.length) {
+          return;
+        }
+        if (this._behaviorLeafletMap) {
+          this._behaviorLeafletMap.remove();
+          this._behaviorLeafletMap = null;
+        }
+        const map = L.map(el, { zoomControl: true });
+        this._behaviorLeafletMap = map;
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "&copy; OpenStreetMap"
+        }).addTo(map);
+        const latLngs = points.map((pt) => [pt.lat, pt.lng]);
+        for (let i = 0; i < latLngs.length; i++) {
+          L.marker(latLngs[i]).addTo(map);
+        }
+        if (latLngs.length > 1) {
+          L.polyline(latLngs, { color: "#2f8bff", weight: 3, opacity: 0.9 }).addTo(map);
+        }
+        const bounds = L.latLngBounds(latLngs);
+        map.fitBounds(bounds, { padding: [18, 18], maxZoom: 16 });
+      },
       closeBehaviorModal() {
+        if (this._behaviorLeafletMap) {
+          this._behaviorLeafletMap.remove();
+          this._behaviorLeafletMap = null;
+        }
         this.activeBehaviorModal.visible = false;
       },
       openBehaviorMapLink() {
         if (!this.activeBehaviorModal.mapUrl) return;
         window.open(this.activeBehaviorModal.mapUrl, "_blank", "noopener,noreferrer");
+      },
+      openGlobalSettingsModal() {
+        this.globalSettingsDraft = {
+          googleMapsApiKey: this.globalSettings.googleMapsApiKey || ""
+        };
+        this.globalSettingsModalOpen = true;
+      },
+      closeGlobalSettingsModal() {
+        this.globalSettingsModalOpen = false;
+      },
+      saveGlobalSettings() {
+        this.globalSettings = {
+          googleMapsApiKey: (this.globalSettingsDraft.googleMapsApiKey || "").trim()
+        };
+        this.persistGlobalSettings();
+        this.globalSettingsModalOpen = false;
+        this.showToast("Configuracoes globais salvas.");
+      },
+      loadGlobalSettings() {
+        try {
+          const raw = localStorage.getItem(GLOBAL_SETTINGS_KEY);
+          if (!raw) return;
+          const parsed = JSON.parse(raw);
+          this.globalSettings = {
+            googleMapsApiKey: (parsed && parsed.googleMapsApiKey) || ""
+          };
+        } catch (err) {
+          this.globalSettings = { googleMapsApiKey: "" };
+        }
+      },
+      persistGlobalSettings() {
+        try {
+          localStorage.setItem(GLOBAL_SETTINGS_KEY, JSON.stringify(this.globalSettings));
+        } catch (err) {
+          // no-op
+        }
       },
       tableRowBehaviors(rowItem) {
         const className = this.currentArrayItemClass;
@@ -1624,6 +1778,7 @@
     },
     mounted() {
       document.body.classList.add("theme-dark");
+      this.loadGlobalSettings();
       this.loadProfilesFromStorage();
       const self = this;
       this._docCloseContext = function (e) {

@@ -7,6 +7,8 @@
   <title>JSON Viewer</title>
   <link rel="stylesheet" href="src/css/bootsrtap-v5.3.8.css" />
   <link rel="stylesheet" href="src/fontawesome5pro/fontawesome-pro-5.8.2.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="src/css/app.css" />
 </head>
 
@@ -19,6 +21,10 @@
           JSON Data Viewer
         </span>
         <div class="d-flex align-items-center gap-2 ms-auto">
+          <button class="btn btn-sm btn-outline-secondary btn-icon" type="button" @click="openGlobalSettingsModal"
+            title="Configuracoes globais">
+            <i class="far fa-cog"></i>
+          </button>
           <button class="btn btn-sm btn-outline-primary btn-icon" type="button" @click="toggleTheme" :title="themeTitle">
             <i :class="themeIcon"></i>
           </button>
@@ -305,6 +311,11 @@
                         <option :value="50">50</option>
                         <option :value="100">100</option>
                       </select>
+                      <button v-for="behavior in currentTableMarkerBehaviors" :key="'table-list-bhv-' + behavior.id" type="button"
+                        class="btn btn-sm btn-outline-info" @click="executeBehaviorOnCurrentTable(behavior)"
+                        :title="'Abrir todos os marcadores da lista: ' + behavior.name">
+                        <i class="far fa-route me-1"></i>{{ behavior.name }} (lista)
+                      </button>
                     </div>
                     <div class="table-toolbar-search flex-grow-1">
                       <div class="input-group input-group-sm table-search-group">
@@ -426,8 +437,30 @@
         </div>
         <div class="behavior-modal-body">
           <p class="mb-3">{{ activeBehaviorModal.summary }}</p>
+          <div class="behavior-map-frame mb-3">
+            <div ref="behaviorMapEl" class="behavior-map-canvas"></div>
+          </div>
           <button type="button" class="btn btn-primary btn-sm" @click="openBehaviorMapLink">
             <i class="far fa-map-marked-alt me-1"></i>Abrir no Google Maps
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="globalSettingsModalOpen" class="behavior-modal-backdrop" @click.self="closeGlobalSettingsModal">
+      <div class="behavior-modal">
+        <div class="behavior-modal-head d-flex align-items-center justify-content-between">
+          <strong>Configuracoes Globais</strong>
+          <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" @click="closeGlobalSettingsModal">
+            <i class="far fa-times"></i>
+          </button>
+        </div>
+        <div class="behavior-modal-body">
+          <label class="small text-secondary mb-1 d-block">Google Maps API Key</label>
+          <input type="text" class="form-control form-control-sm mb-3" v-model.trim="globalSettingsDraft.googleMapsApiKey"
+            placeholder="Cole sua chave da API do Google Maps">
+          <button type="button" class="btn btn-primary btn-sm" @click="saveGlobalSettings">
+            <i class="far fa-save me-1"></i>Salvar configuracoes
           </button>
         </div>
       </div>
@@ -443,6 +476,8 @@
 
   <script src="src/js/vue.js"></script>
   <script src="src/js/bootstrap-v5.3.8.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="src/js/components/json-node.component.js"></script>
   <script src="src/js/app.js"></script>
 </body>
