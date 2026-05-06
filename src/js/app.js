@@ -2,6 +2,27 @@
   const PROFILE_STORAGE_KEY = "jsonViewer.classProfiles.v1";
   const GLOBAL_SETTINGS_KEY = "jsonViewer.globalSettings.v1";
   const UI_SESSION_KEY = "jsonViewer.uiSession.v1";
+  const DATA_URI_MAX_CHARS = 40 * 1024 * 1024;
+  const TREE_PREVIEW_STRING_MAX = 160;
+  const TREE_LINK_LABEL_MAX = 88;
+  const TREE_TITLE_ATTR_MAX = 12000;
+  const DATA_URI_MIME_EXT = {
+    "application/pdf": "pdf",
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "image/svg+xml": "svg",
+    "image/bmp": "bmp",
+    "text/plain": "txt",
+    "text/html": "html",
+    "text/css": "css",
+    "application/json": "json",
+    "application/xml": "xml",
+    "application/zip": "zip",
+    "application/octet-stream": "bin"
+  };
 
   const app = Vue.createApp({
     components: {
@@ -103,6 +124,14 @@
           headerText: "",
           payloadText: "",
           signaturePart: ""
+        },
+        dataUriModal: {
+          open: false,
+          error: "",
+          mime: "",
+          previewUrl: "",
+          downloadName: "",
+          downloadBlob: null
         },
         gotoPathInput: "",
         globalSearchInput: "",
@@ -788,7 +817,7 @@
           const num = Number(value);
           return isFinite(num) ? String(num) : null;
         }
-        if (rule.displayType === "link" || rule.displayType === "jwt") {
+        if (rule.displayType === "link" || rule.displayType === "jwt" || rule.displayType === "data-uri") {
           if (value == null) return null;
           const t = String(value).trim();
           return t ? t : null;
@@ -822,14 +851,61 @@
           }
         }
       },
+      truncateTreeString(s, maxLen) {
+        if (s == null) {
+          return "";
+        }
+        const t = String(s);
+        const n = typeof maxLen === "number" && maxLen > 4 ? maxLen : TREE_PREVIEW_STRING_MAX;
+        if (t.length <= n) {
+          return t;
+        }
+        return t.slice(0, n - 1) + "\u2026";
+      },
+      treeValueTooltipText(path, value) {
+        if (value !== null && typeof value === "object") {
+          return "";
+        }
+        const raw = value == null ? "" : String(value);
+        if (!raw) {
+          return "";
+        }
+        const ctx = this.ruleContextFromPath(path);
+        const rule = ctx ? this.getRule(ctx.className, ctx.propertyName) : null;
+        const linkLike =
+          rule &&
+          rule.enabled &&
+          (rule.displayType === "link" ||
+            rule.displayType === "jwt" ||
+            rule.displayType === "data-uri");
+        const needTitleForLink = linkLike && raw.length > TREE_LINK_LABEL_MAX;
+        const needTitleForString =
+          !linkLike && typeof value === "string" && raw.length > TREE_PREVIEW_STRING_MAX;
+        if (!needTitleForLink && !needTitleForString) {
+          return "";
+        }
+        if (raw.length <= TREE_TITLE_ATTR_MAX) {
+          return raw;
+        }
+        return (
+          raw.slice(0, TREE_TITLE_ATTR_MAX - 64) +
+          "\n\u2026 [" +
+          raw.length +
+          " caracteres no total]"
+        );
+      },
       treeValuePreview(path, value) {
         if (Array.isArray(value)) return "[" + value.length + "]";
         if (value && typeof value === "object") return "{" + Object.keys(value).length + "}";
         const transformed = this.formatByRule(value, this.ruleContextFromPath(path));
         const finalValue = transformed != null ? transformed : value;
-        if (typeof finalValue === "string") return '"' + finalValue + '"';
+        if (typeof finalValue === "string") {
+          const inner = this.truncateTreeString(finalValue, TREE_PREVIEW_STRING_MAX);
+          return '"' + inner + '"';
+        }
         if (finalValue === null) return "null";
-        return String(finalValue);
+        const asStr = String(finalValue);
+        return this.truncateTreeString(asStr, TREE_PREVIEW_STRING_MAX);
       },
       treeValueClass(path, value) {
         const transformed = this.formatByRule(value, this.ruleContextFromPath(path));
@@ -858,9 +934,25 @@
             return null;
           }
           const transformed = this.formatByRule(value, ctx);
-          const label =
-            transformed != null && transformed !== "" ? transformed : raw.length > 48 ? raw.slice(0, 45) + "…" : raw;
+          const base =
+            transformed != null && transformed !== "" ? transformed : raw.length > 48 ? raw.slice(0, 45) + "\u2026" : raw;
+          const label = this.truncateTreeString(base, TREE_LINK_LABEL_MAX);
           return { kind: "jwt", rawToken: raw, label: label };
+        }
+        if (rule.displayType === "data-uri") {
+          const raw = String(value).trim();
+          if (!raw || !this.isLikelyDataUri(raw)) {
+            return null;
+          }
+          const mime = this.parseDataUriMime(raw);
+          const shortHint = mime ? "Data URI (" + mime + ")" : "Data URI";
+          const prefixSample = raw.slice(0, Math.min(48, raw.length));
+          const base =
+            raw.length > shortHint.length + 12
+              ? shortHint + " \u00b7 " + prefixSample + (raw.length > prefixSample.length ? "\u2026" : "")
+              : shortHint;
+          const label = this.truncateTreeString(base, TREE_LINK_LABEL_MAX);
+          return { kind: "data-uri", rawDataUri: raw, label: label };
         }
         if (rule.displayType !== "link") {
           return null;
@@ -870,8 +962,9 @@
           return null;
         }
         const transformed = this.formatByRule(value, ctx);
-        const label = transformed != null && transformed !== "" ? transformed : String(value).trim();
-        return { kind: "external", href: href, label: label || href };
+        const base = transformed != null && transformed !== "" ? transformed : String(value).trim();
+        const label = this.truncateTreeString(base || href, TREE_LINK_LABEL_MAX) || href;
+        return { kind: "external", href: href, label: label };
       },
       decodeJwtBase64UrlSegment(segment) {
         if (segment == null || typeof segment !== "string" || !segment.length) {
@@ -910,6 +1003,120 @@
           return header && typeof header === "object" && (header.alg !== undefined || header.typ !== undefined);
         } catch (e) {
           return false;
+        }
+      },
+      isLikelyDataUri(s) {
+        if (!s || typeof s !== "string") {
+          return false;
+        }
+        const t = s.trim();
+        if (!/^data:/i.test(t)) {
+          return false;
+        }
+        const comma = t.indexOf(",");
+        if (comma <= 5) {
+          return false;
+        }
+        return true;
+      },
+      parseDataUriMime(dataUri) {
+        if (!dataUri || typeof dataUri !== "string") {
+          return "";
+        }
+        const m = dataUri.trim().match(/^data:([^;,]+)/i);
+        return m ? m[1].trim().split(";")[0].trim() : "";
+      },
+      guessDownloadFilenameFromMime(mime) {
+        const baseMime = (mime || "").split(";")[0].trim().toLowerCase();
+        if (DATA_URI_MIME_EXT[baseMime]) {
+          return "download." + DATA_URI_MIME_EXT[baseMime];
+        }
+        if (baseMime.indexOf("image/") === 0) {
+          const sub = baseMime.slice("image/".length).replace(/\+xml$/i, "");
+          const safe = sub.replace(/[^a-z0-9]/gi, "") || "img";
+          return "download." + safe;
+        }
+        return "download.bin";
+      },
+      async blobFromDataUri(dataUri) {
+        const res = await fetch(dataUri);
+        if (!res.ok) {
+          throw new Error("fetch failed");
+        }
+        return res.blob();
+      },
+      triggerBlobDownload(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename || "download.bin";
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () {
+          URL.revokeObjectURL(url);
+        }, 2500);
+      },
+      async openDataUriFromValue(dataUri) {
+        const s = dataUri != null ? String(dataUri).trim() : "";
+        if (!s) {
+          this.showToast("Data URI vazio.", "error");
+          return;
+        }
+        if (!this.isLikelyDataUri(s)) {
+          this.showToast("Data URI invalido.", "error");
+          return;
+        }
+        if (s.length > DATA_URI_MAX_CHARS) {
+          this.showToast("Data URI muito grande para processar.", "error");
+          return;
+        }
+        try {
+          const blob = await this.blobFromDataUri(s);
+          const mimeFromBlob = blob.type || "";
+          const mimeFromUri = this.parseDataUriMime(s);
+          const mime = mimeFromBlob || mimeFromUri || "application/octet-stream";
+          const name = this.guessDownloadFilenameFromMime(mime);
+          if (mime.indexOf("image/") === 0) {
+            this.closeDataUriModal();
+            const previewUrl = URL.createObjectURL(blob);
+            this.dataUriModal.open = true;
+            this.dataUriModal.error = "";
+            this.dataUriModal.mime = mime;
+            this.dataUriModal.previewUrl = previewUrl;
+            this.dataUriModal.downloadName = name;
+            this.dataUriModal.downloadBlob = blob;
+            return;
+          }
+          this.triggerBlobDownload(blob, name);
+        } catch (e) {
+          this.showToast("Nao foi possivel processar o Data URI.", "error");
+        }
+      },
+      closeDataUriModal() {
+        if (this.dataUriModal.previewUrl) {
+          URL.revokeObjectURL(this.dataUriModal.previewUrl);
+        }
+        this.dataUriModal.open = false;
+        this.dataUriModal.error = "";
+        this.dataUriModal.mime = "";
+        this.dataUriModal.previewUrl = "";
+        this.dataUriModal.downloadName = "";
+        this.dataUriModal.downloadBlob = null;
+      },
+      downloadDataUriModalFile() {
+        const blob = this.dataUriModal.downloadBlob;
+        const name = this.dataUriModal.downloadName || "download.bin";
+        if (!blob) {
+          this.showToast("Nenhum arquivo para baixar.", "error");
+          return;
+        }
+        this.triggerBlobDownload(blob, name);
+      },
+      onTreeOpenDataUri(payload) {
+        if (payload && payload.dataUri) {
+          this.openDataUriFromValue(payload.dataUri);
         }
       },
       openJwtDecodeModal(token) {
@@ -2296,6 +2503,28 @@
         const label = baseLabel.length > 64 ? baseLabel.slice(0, 61) + "…" : baseLabel;
         return { rawToken: str, label: label };
       },
+      tableCellDataUriMeta(item, col) {
+        const raw = this.tableCellRaw(item, col);
+        if (raw === null || typeof raw === "object") {
+          return null;
+        }
+        if (col === "__primitive" || !this.currentArrayItemClass) {
+          return null;
+        }
+        const ctx = { className: this.currentArrayItemClass, propertyName: col };
+        const rule = this.getRule(ctx.className, ctx.propertyName);
+        if (!rule || !rule.enabled || rule.displayType !== "data-uri") {
+          return null;
+        }
+        const str = String(raw).trim();
+        if (!str || !this.isLikelyDataUri(str)) {
+          return null;
+        }
+        const transformed = this.formatByRule(raw, ctx);
+        const baseLabel = transformed != null && transformed !== "" ? transformed : str;
+        const label = baseLabel.length > 64 ? baseLabel.slice(0, 61) + "…" : baseLabel;
+        return { rawDataUri: str, label: label };
+      },
       tableCellPresentation(rowMeta, col) {
         const item = rowMeta.item;
         const cellClass = this.tableCellClassDisplay(item, col);
@@ -2310,6 +2539,10 @@
         const jwt = this.tableCellJwtMeta(item, col);
         if (jwt) {
           return { kind: "jwt", rawToken: jwt.rawToken, text: jwt.label, cellClass: cellClass };
+        }
+        const dataUri = this.tableCellDataUriMeta(item, col);
+        if (dataUri) {
+          return { kind: "data-uri", rawDataUri: dataUri.rawDataUri, text: dataUri.label, cellClass: cellClass };
         }
         const link = this.tableCellLinkMeta(item, col);
         if (link) {
@@ -3110,6 +3343,11 @@
           e.preventDefault();
           return;
         }
+        if (this.dataUriModal.open) {
+          this.closeDataUriModal();
+          e.preventDefault();
+          return;
+        }
         if (this.escapeNavigationIgnoredTarget(e.target)) {
           return;
         }
@@ -3148,6 +3386,7 @@
       document.addEventListener("keydown", this._boundEscapeNav);
     },
     beforeUnmount() {
+      this.closeDataUriModal();
       if (this._boundEscapeNav) {
         document.removeEventListener("keydown", this._boundEscapeNav);
       }
