@@ -32,6 +32,11 @@
           y: 0,
           item: null
         },
+        toast: {
+          visible: false,
+          message: "",
+          type: "success"
+        },
         schemaModel: {
           classes: [],
           objectClassByNormPath: {},
@@ -1159,11 +1164,57 @@
       copyTableRow(item) {
         const text = JSON.stringify(item, null, 2);
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).catch(function () {
+          const self = this;
+          navigator.clipboard.writeText(text).then(function () {
+            self.showToast("Linha copiada para a area de transferencia.");
+          }).catch(function () {
             window.prompt("Copiar linha", text);
           });
         } else {
           window.prompt("Copiar linha", text);
+        }
+      },
+      showToast(message, type) {
+        this.toast.message = message;
+        this.toast.type = type || "success";
+        this.toast.visible = true;
+        if (this._toastTimer) {
+          clearTimeout(this._toastTimer);
+        }
+        const self = this;
+        this._toastTimer = setTimeout(function () {
+          self.toast.visible = false;
+        }, 2200);
+      },
+      escapeTsvCell(value) {
+        const txt = value == null ? "" : String(value);
+        if (/[\t\r\n"]/.test(txt)) {
+          return '"' + txt.replace(/"/g, '""') + '"';
+        }
+        return txt;
+      },
+      copyWholeTableAsTsv() {
+        if (!this.showTableView || !this.tableColumnKeys.length) {
+          return;
+        }
+        const headers = this.tableColumnKeys.map((col) => this.escapeTsvCell(this.tableHeaderLabel(col)));
+        const lines = [headers.join("\t")];
+        const rows = this.tableFilteredRowsMeta;
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i].item;
+          const cells = this.tableColumnKeys.map((col) => this.escapeTsvCell(this.formatTableCellDisplay(row, col)));
+          lines.push(cells.join("\t"));
+        }
+        const tsv = lines.join("\n");
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          const self = this;
+          navigator.clipboard.writeText(tsv).then(function () {
+            self.showToast("Tabela copiada em TSV (" + rows.length + " linhas).");
+          }).catch(function () {
+            window.prompt("Copiar TSV", tsv);
+          });
+        } else {
+          window.prompt("Copiar TSV", tsv);
         }
       },
       tablePagePrev() {
@@ -1400,6 +1451,9 @@
     beforeUnmount() {
       if (this._boundEscapeNav) {
         document.removeEventListener("keydown", this._boundEscapeNav);
+      }
+      if (this._toastTimer) {
+        clearTimeout(this._toastTimer);
       }
       this.dismissRowContextMenu();
       if (this._tableMeasureEl && this._tableMeasureEl.parentNode) {

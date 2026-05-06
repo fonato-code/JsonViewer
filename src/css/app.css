@@ -1015,6 +1015,15 @@ body.theme-light .row-context-menu {
   text-overflow: ellipsis;
 }
 
+.table-copy-all-btn {
+  color: var(--text-secondary) !important;
+  line-height: 1;
+}
+
+.table-copy-all-btn:hover {
+  color: var(--text-primary) !important;
+}
+
 .table-th-active {
   background: color-mix(in srgb, var(--accent) 38%, transparent) !important;
   box-shadow: inset 0 -2px 0 var(--accent);
@@ -1026,4 +1035,36 @@ body.theme-light .row-context-menu {
 
 .table-data-row {
   cursor: context-menu;
+}
+
+.app-toast-wrap {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1090;
+  pointer-events: none;
+}
+
+.app-toast {
+  display: inline-flex;
+  align-items: center;
+  max-width: min(26rem, calc(100vw - 2rem));
+  padding: 0.58rem 0.82rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  background: linear-gradient(180deg, #10244a 0%, #0b1934 100%);
+  color: var(--text-primary);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+  font-size: 0.86rem;
+  line-height: 1.25;
+}
+
+.app-toast--success i {
+  color: #53dba5;
+}
+
+body.theme-light .app-toast {
+  background: linear-gradient(180deg, #ffffff 0%, #edf4ff 100%);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 10px 24px rgba(20, 40, 85, 0.16);
 }

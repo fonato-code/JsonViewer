@@ -275,7 +275,12 @@
                       </colgroup>
                       <thead>
                         <tr>
-                          <th scope="col" class="table-col-idx text-secondary">#</th>
+                          <th scope="col" class="table-col-idx text-secondary">
+                            <button type="button" class="btn btn-link table-copy-all-btn p-0 text-decoration-none"
+                              title="Copiar tabela inteira em TSV (com cabecalhos)" @click.prevent="copyWholeTableAsTsv">
+                              <i class="far fa-copy"></i>
+                            </button>
+                          </th>
                           <th v-for="col in tableColumnKeys" :key="'th-' + col"
                             :class="['table-sort-th', 'table-resizable-th', { 'table-th-active': tableSortColumn === col }]">
                             <button type="button" class="btn btn-link table-th-btn p-0 text-decoration-none"
@@ -348,6 +353,13 @@
       <button type="button" class="row-context-menu-item" role="menuitem" @click="onRowContextMenuCopy">
         <i class="far fa-copy me-2"></i> Copiar linha (JSON)
       </button>
+    </div>
+
+    <div v-show="toast.visible" class="app-toast-wrap" aria-live="polite" aria-atomic="true">
+      <div class="app-toast" :class="'app-toast--' + toast.type">
+        <i class="far fa-check-circle me-2"></i>
+        <span>{{ toast.message }}</span>
+      </div>
     </div>
   </div>
 
