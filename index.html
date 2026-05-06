@@ -312,10 +312,21 @@
                   </div>
                 </div>
               </div>
-              <div v-if="!showTableView && currentNodeBehaviors.length" class="d-flex flex-wrap gap-2 mb-2 flex-shrink-0">
+              <div v-if="!showTableView && (currentNodeBehaviors.length || currentTableMarkerBehaviors.length || currentTablePieBehaviors.length)"
+                class="d-flex flex-wrap gap-2 mb-2 flex-shrink-0">
                 <button v-for="behavior in currentNodeBehaviors" :key="'tree-behavior-' + behavior.id" type="button"
                   class="btn btn-sm btn-outline-info" @click="executeBehaviorOnNode(behavior, currentNode)">
                   <i class="far fa-bolt me-1"></i>{{ behavior.name }}
+                </button>
+                <button v-for="behavior in currentTableMarkerBehaviors" :key="'tree-list-marker-' + behavior.id" type="button"
+                  class="btn btn-sm btn-outline-info" @click="executeBehaviorOnCurrentTable(behavior)"
+                  :title="'Abrir todos os marcadores da lista: ' + behavior.name">
+                  <i class="far fa-route me-1"></i>{{ behavior.name }} (lista)
+                </button>
+                <button v-for="behavior in currentTablePieBehaviors" :key="'tree-list-pie-' + behavior.id" type="button"
+                  class="btn btn-sm btn-outline-warning" @click="executeBehaviorOnCurrentTable(behavior)"
+                  :title="'Abrir grafico pizza: ' + behavior.name">
+                  <i class="far fa-chart-pie me-1"></i>{{ behavior.name }}
                 </button>
               </div>
 
@@ -395,7 +406,7 @@
                               <button v-for="behavior in tableRowBehaviors(rowMeta.item)" :key="'row-bhv-' + rowMeta.index + '-' + behavior.id"
                                 type="button" class="btn btn-xs btn-outline-info table-row-behavior-btn"
                                 @click="executeBehaviorOnNode(behavior, rowMeta.item)" :title="behavior.name">
-                                <i class="far fa-map-marker-alt"></i>
+                                <i :class="behaviorActionIconClass(behavior)"></i>
                               </button>
                             </div>
                           </td>
@@ -434,8 +445,10 @@
               <div v-else class="tree-wrap flex-grow-1 min-h-0">
                 <json-node :node="currentNode" :node-key="currentNodeLabel" :path="selectedPath"
                   :expanded-state="expandedState" :active-path="selectedPath"
-                  :value-preview-resolver="treeValuePreview" :value-class-resolver="treeValueClass" @toggle="toggleExpand"
-                  @select="selectPath"></json-node>
+                  :value-preview-resolver="treeValuePreview" :value-class-resolver="treeValueClass"
+                  :behavior-resolver="treeRowBehaviors" :behavior-icon-resolver="behaviorActionIconClass"
+                  @toggle="toggleExpand" @select="selectPath"
+                  @run-behavior="onTreeRunBehavior($event)"></json-node>
               </div>
             </div>
             <div v-else class="state-box flex-shrink-0">

@@ -8,7 +8,9 @@
       expandedState: { type: Object, required: true },
       activePath: { type: Array, required: true },
       valuePreviewResolver: { type: Function, default: null },
-      valueClassResolver: { type: Function, default: null }
+      valueClassResolver: { type: Function, default: null },
+      behaviorResolver: { type: Function, default: null },
+      behaviorIconResolver: { type: Function, default: null }
     },
     methods: {
       nodePath(childKey) {
@@ -55,11 +57,27 @@
         if (value && typeof value === "object") return "{" + Object.keys(value).length + "}";
         if (typeof value === "string") return '"' + value + '"';
         return String(value);
+      },
+      behaviorIconClass(behavior) {
+        if (typeof this.behaviorIconResolver === "function") {
+          return this.behaviorIconResolver(behavior, this.node);
+        }
+        return "far fa-bolt";
+      },
+      emitRunBehavior(behavior) {
+        this.$emit("run-behavior", { behavior: behavior, node: this.node, path: this.path });
       }
     },
     computed: {
       isContainer() {
         return this.node !== null && typeof this.node === "object";
+      },
+      nodeBehaviors() {
+        if (typeof this.behaviorResolver !== "function") {
+          return [];
+        }
+        const list = this.behaviorResolver(this.path, this.node);
+        return Array.isArray(list) ? list : [];
       }
     },
     template: `
@@ -72,6 +90,18 @@
           <span class="key">{{ nodeKey }}</span>
           <span class="text-secondary">:</span>
           <span :class="valueClass(node)">{{ valuePreview(node) }}</span>
+          <span v-if="nodeBehaviors.length" class="tree-line-actions ms-auto" @click.stop>
+            <button
+              v-for="behavior in nodeBehaviors"
+              :key="'node-bhv-' + pathText(path) + '-' + behavior.id"
+              type="button"
+              :class="['btn', 'btn-xs', 'table-row-behavior-btn', 'tree-row-behavior-btn', behavior.type === 'pieChart' ? 'btn-outline-warning' : 'btn-outline-info']"
+              @click.stop="emitRunBehavior(behavior)"
+              :title="behavior.name"
+            >
+              <i :class="behaviorIconClass(behavior)"></i>
+            </button>
+          </span>
         </div>
         <div v-if="isContainer && isExpanded(path)">
           <json-node
@@ -84,8 +114,11 @@
             :active-path="activePath"
             :value-preview-resolver="valuePreviewResolver"
             :value-class-resolver="valueClassResolver"
+            :behavior-resolver="behaviorResolver"
+            :behavior-icon-resolver="behaviorIconResolver"
             @toggle="$emit('toggle', $event)"
             @select="$emit('select', $event)"
+            @run-behavior="$emit('run-behavior', $event)"
           ></json-node>
         </div>
       </div>

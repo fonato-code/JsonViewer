@@ -12,6 +12,7 @@
 }
 
 body.theme-dark {
+  color-scheme: dark;
   --bg-main: #060d1f;
   --bg-surface: #0c152f;
   --bg-surface-2: #0f1d3c;
@@ -46,6 +47,7 @@ body {
 }
 
 body.theme-light {
+  color-scheme: light;
   background:
     radial-gradient(circle at 15% 0%, rgba(52, 119, 255, 0.2), transparent 30%),
     radial-gradient(circle at 80% 8%, rgba(28, 177, 255, 0.18), transparent 25%),
@@ -541,6 +543,16 @@ body.theme-dark .rules-sidebar .input-group-text {
   outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
+.tree-line-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tree-row-behavior-btn {
+  margin-left: 0.2rem;
+}
+
 .key {
   color: #7db8ff;
   font-weight: 600;
@@ -777,7 +789,9 @@ body.theme-light .path-breadcrumb-current {
 .table-view-grid,
 .tree-wrap,
 .viewer-content,
-.input-sidebar-body {
+.input-sidebar-body,
+.rules-property-list,
+.rules-behavior-block {
   scrollbar-width: thin;
   scrollbar-color: rgba(130, 170, 230, 0.42) rgba(5, 10, 22, 0.72);
 }
@@ -785,14 +799,18 @@ body.theme-light .path-breadcrumb-current {
 body.theme-light .table-view-grid,
 body.theme-light .tree-wrap,
 body.theme-light .viewer-content,
-body.theme-light .input-sidebar-body {
+body.theme-light .input-sidebar-body,
+body.theme-light .rules-property-list,
+body.theme-light .rules-behavior-block {
   scrollbar-color: rgba(90, 110, 160, 0.55) rgba(230, 235, 245, 0.95);
 }
 
 .table-view-grid::-webkit-scrollbar,
 .tree-wrap::-webkit-scrollbar,
 .viewer-content::-webkit-scrollbar,
-.input-sidebar-body::-webkit-scrollbar {
+.input-sidebar-body::-webkit-scrollbar,
+.rules-property-list::-webkit-scrollbar,
+.rules-behavior-block::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
@@ -800,7 +818,9 @@ body.theme-light .input-sidebar-body {
 .table-view-grid::-webkit-scrollbar-track,
 .tree-wrap::-webkit-scrollbar-track,
 .viewer-content::-webkit-scrollbar-track,
-.input-sidebar-body::-webkit-scrollbar-track {
+.input-sidebar-body::-webkit-scrollbar-track,
+.rules-property-list::-webkit-scrollbar-track,
+.rules-behavior-block::-webkit-scrollbar-track {
   background: rgba(5, 10, 22, 0.65);
   border-radius: 8px;
 }
@@ -808,14 +828,18 @@ body.theme-light .input-sidebar-body {
 body.theme-light .table-view-grid::-webkit-scrollbar-track,
 body.theme-light .tree-wrap::-webkit-scrollbar-track,
 body.theme-light .viewer-content::-webkit-scrollbar-track,
-body.theme-light .input-sidebar-body::-webkit-scrollbar-track {
+body.theme-light .input-sidebar-body::-webkit-scrollbar-track,
+body.theme-light .rules-property-list::-webkit-scrollbar-track,
+body.theme-light .rules-behavior-block::-webkit-scrollbar-track {
   background: rgba(230, 235, 245, 0.85);
 }
 
 .table-view-grid::-webkit-scrollbar-thumb,
 .tree-wrap::-webkit-scrollbar-thumb,
 .viewer-content::-webkit-scrollbar-thumb,
-.input-sidebar-body::-webkit-scrollbar-thumb {
+.input-sidebar-body::-webkit-scrollbar-thumb,
+.rules-property-list::-webkit-scrollbar-thumb,
+.rules-behavior-block::-webkit-scrollbar-thumb {
   background: rgba(130, 170, 230, 0.42);
   border-radius: 8px;
   border: 2px solid transparent;
@@ -825,14 +849,18 @@ body.theme-light .input-sidebar-body::-webkit-scrollbar-track {
 body.theme-light .table-view-grid::-webkit-scrollbar-thumb,
 body.theme-light .tree-wrap::-webkit-scrollbar-thumb,
 body.theme-light .viewer-content::-webkit-scrollbar-thumb,
-body.theme-light .input-sidebar-body::-webkit-scrollbar-thumb {
+body.theme-light .input-sidebar-body::-webkit-scrollbar-thumb,
+body.theme-light .rules-property-list::-webkit-scrollbar-thumb,
+body.theme-light .rules-behavior-block::-webkit-scrollbar-thumb {
   background: rgba(90, 110, 160, 0.45);
 }
 
 .table-view-grid::-webkit-scrollbar-thumb:hover,
 .tree-wrap::-webkit-scrollbar-thumb:hover,
 .viewer-content::-webkit-scrollbar-thumb:hover,
-.input-sidebar-body::-webkit-scrollbar-thumb:hover {
+.input-sidebar-body::-webkit-scrollbar-thumb:hover,
+.rules-property-list::-webkit-scrollbar-thumb:hover,
+.rules-behavior-block::-webkit-scrollbar-thumb:hover {
   background: rgba(150, 190, 245, 0.55);
   background-clip: padding-box;
 }

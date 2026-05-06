@@ -1,6 +1,7 @@
 (function () {
   const PROFILE_STORAGE_KEY = "jsonViewer.classProfiles.v1";
   const GLOBAL_SETTINGS_KEY = "jsonViewer.globalSettings.v1";
+  const UI_SESSION_KEY = "jsonViewer.uiSession.v1";
 
   const app = Vue.createApp({
     components: {
@@ -87,7 +88,7 @@
         return this.rootDataOriginal === null ? "Aguardando dados" : "JSON carregado";
       },
       themeIcon() {
-        return this.theme === "dark" ? "far fa-sun" : "far fa-moon";
+        return this.theme === "dark" ? "fas fa-sun" : "fas fa-moon";
       },
       themeTitle() {
         return this.theme === "dark" ? "Trocar para tema claro" : "Trocar para tema escuro";
@@ -315,6 +316,7 @@
       },
       tablePageSize: function () {
         this.tablePage = 1;
+        this.persistUiSessionPreferences();
       },
       selectedPath: function () {
         this.tablePage = 1;
@@ -324,9 +326,13 @@
           if (self.showTableView && self.canUseTableView) {
             self.initTableColumnWidthsFromContent();
           }
+          if (!self.rightPanelCollapsed) {
+            self.syncSchemaClassWithViewer();
+          }
         });
       },
       tableViewEnabled: function (v) {
+        this.persistUiSessionPreferences();
         if (!v) {
           return;
         }
@@ -810,8 +816,52 @@
       },
       toggleTheme() {
         this.theme = this.theme === "dark" ? "light" : "dark";
+        this.applyThemeClass();
+        this.persistUiSessionPreferences();
+      },
+      applyThemeClass() {
         document.body.classList.toggle("theme-dark", this.theme === "dark");
         document.body.classList.toggle("theme-light", this.theme === "light");
+      },
+      loadUiSessionPreferences() {
+        try {
+          const raw = sessionStorage.getItem(UI_SESSION_KEY);
+          if (!raw) return;
+          const parsed = JSON.parse(raw);
+          if (parsed && (parsed.theme === "dark" || parsed.theme === "light")) {
+            this.theme = parsed.theme;
+          }
+          if (parsed && typeof parsed.tableViewEnabled === "boolean") {
+            this.tableViewEnabled = parsed.tableViewEnabled;
+          }
+          if (parsed && typeof parsed.inputPanelCollapsed === "boolean") {
+            this.inputPanelCollapsed = parsed.inputPanelCollapsed;
+          }
+          if (parsed && typeof parsed.rightPanelCollapsed === "boolean") {
+            this.rightPanelCollapsed = parsed.rightPanelCollapsed;
+          }
+          if (parsed && Number.isInteger(parsed.tablePageSize) && parsed.tablePageSize > 0) {
+            this.tablePageSize = parsed.tablePageSize;
+          }
+        } catch (err) {
+          // no-op
+        }
+      },
+      persistUiSessionPreferences() {
+        try {
+          sessionStorage.setItem(
+            UI_SESSION_KEY,
+            JSON.stringify({
+              theme: this.theme,
+              tableViewEnabled: !!this.tableViewEnabled,
+              inputPanelCollapsed: !!this.inputPanelCollapsed,
+              rightPanelCollapsed: !!this.rightPanelCollapsed,
+              tablePageSize: this.tablePageSize
+            })
+          );
+        } catch (err) {
+          // no-op
+        }
       },
       parseJson() {
         this.jsonError = "";
@@ -885,7 +935,6 @@
         };
         this.selectedSchemaClass = "";
         this.selectedSchemaProperty = "";
-        this.tableViewEnabled = false;
         this.tablePage = 1;
         this.tablePageSize = 10;
         this.tableSearch = "";
@@ -1049,15 +1098,55 @@
       },
       collapseInputPanel() {
         this.inputPanelCollapsed = true;
+        this.persistUiSessionPreferences();
       },
       expandInputPanel() {
         this.inputPanelCollapsed = false;
+        this.persistUiSessionPreferences();
       },
       collapseRightPanel() {
         this.rightPanelCollapsed = true;
+        this.persistUiSessionPreferences();
       },
       expandRightPanel() {
         this.rightPanelCollapsed = false;
+        this.persistUiSessionPreferences();
+        const self = this;
+        this.$nextTick(function () {
+          self.syncSchemaClassWithViewer();
+        });
+      },
+      schemaClassForCurrentViewerLevel() {
+        if (this.rootDataView === null) {
+          return "";
+        }
+        const node = this.currentNode;
+        if (Array.isArray(node)) {
+          return this.schemaModel.arrayItemClassByNormPath[this.normalizePath(this.selectedPath)] || "";
+        }
+        if (node !== null && typeof node === "object") {
+          return this.getClassNameForObjectPath(this.selectedPath);
+        }
+        if (!this.selectedPath.length) {
+          return this.getClassNameForObjectPath([]);
+        }
+        return this.getClassNameForObjectPath(this.selectedPath.slice(0, -1));
+      },
+      syncSchemaClassWithViewer() {
+        if (this.rootDataView === null) {
+          return;
+        }
+        const name = this.schemaClassForCurrentViewerLevel();
+        if (!name) {
+          return;
+        }
+        const exists = this.schemaClasses.some(function (c) {
+          return c.name === name;
+        });
+        if (exists) {
+          this.selectedSchemaClass = name;
+          this.ensureSelectedProperty();
+        }
       },
       selectSchemaClass(className) {
         this.selectedSchemaClass = className;
@@ -1263,62 +1352,10 @@
         return { mapUrl: mapUrl, embedUrl: embedUrl };
       },
       executeBehaviorOnCurrentTable(behavior) {
-        if (!behavior || !Array.isArray(this.currentNode)) {
+        if (!Array.isArray(this.currentNode)) {
           return;
         }
-        if (behavior.type === "pieChart") {
-          if (!this.behaviorAllowedForClass(behavior, this.currentArrayItemClass)) {
-            this.showToast("Grafico Pizza disponivel apenas para niveis de lista.", "error");
-            return;
-          }
-          const pieData = this.resolvePieChartData(behavior, this.currentNode);
-          if (!pieData || !pieData.labels.length) {
-            this.showToast("Grafico Pizza sem dados validos para exibir.", "error");
-            return;
-          }
-          this.activeBehaviorModal = {
-            visible: true,
-            title: behavior.name || "Grafico Pizza",
-            summary: pieData.labels.length + " grupo(s) encontrado(s).",
-            mapUrl: "",
-            embedUrl: "",
-            points: [],
-            kind: "pie",
-            chartData: pieData
-          };
-          this.$nextTick(() => this.renderBehaviorChart());
-          return;
-        }
-        if (behavior.type !== "marker") {
-          return;
-        }
-        const points = [];
-        for (let i = 0; i < this.currentNode.length; i++) {
-          const item = this.currentNode[i];
-          if (!item || typeof item !== "object" || Array.isArray(item)) {
-            continue;
-          }
-          const coords = this.resolveMarkerLatLng(behavior, item);
-          if (coords) {
-            points.push(coords);
-          }
-        }
-        if (!points.length) {
-          this.showToast("Nenhum marcador valido encontrado nesta lista.", "error");
-          return;
-        }
-        const urls = this.buildGoogleMapsListUrls(points);
-        this.activeBehaviorModal = {
-          visible: true,
-          title: (behavior.name || "Marker") + " (lista)",
-          summary: points.length + " marcador(es) conectados em sequencia.",
-          mapUrl: urls.mapUrl,
-          embedUrl: urls.embedUrl,
-          points: points,
-          kind: "map",
-          chartData: null
-        };
-        this.$nextTick(() => this.renderBehaviorMap());
+        this.executeBehaviorOnArrayRows(behavior, this.currentNode, this.currentArrayItemClass);
       },
       resolvePieChartData(behavior, rows) {
         if (!behavior || !behavior.config || !behavior.config.groupByProperty) {
@@ -1465,6 +1502,137 @@
         } catch (err) {
           // no-op
         }
+      },
+      behaviorActionIconClass(behavior, node) {
+        if (!behavior || !behavior.type) return "far fa-bolt";
+        if (behavior.type === "marker") {
+          return Array.isArray(node) ? "far fa-route" : "far fa-map-marker-alt";
+        }
+        if (behavior.type === "pieChart") return "far fa-chart-pie";
+        return "far fa-bolt";
+      },
+      arrayItemClassForPath(path) {
+        return this.schemaModel.arrayItemClassByNormPath[this.normalizePath(path)] || "";
+      },
+      treeArrayListBehaviors(path, arr) {
+        if (!Array.isArray(arr)) {
+          return [];
+        }
+        const itemClass = this.arrayItemClassForPath(path);
+        if (!itemClass) {
+          return [];
+        }
+        const list = this.behaviorRulesByClass[itemClass] || [];
+        const markers = list.filter(
+          (item) => item && item.type === "marker" && item.enabled && this.behaviorHasRequiredConfig(item)
+        );
+        const pies = list.filter(
+          (item) =>
+            item &&
+            item.type === "pieChart" &&
+            this.behaviorAllowedForClass(item, itemClass) &&
+            item.enabled &&
+            this.behaviorHasRequiredConfig(item)
+        );
+        return markers.concat(pies);
+      },
+      treeRowBehaviors(path, rowItem) {
+        if (Array.isArray(rowItem)) {
+          return this.treeArrayListBehaviors(path, rowItem);
+        }
+        if (!rowItem || typeof rowItem !== "object") {
+          return [];
+        }
+        const className = this.getClassNameForObjectPath(path);
+        if (!className) return [];
+        const list = this.behaviorRulesByClass[className] || [];
+        return list.filter((item) => this.isBehaviorEnabledForNode(item, rowItem));
+      },
+      getViewValueAtPath(path) {
+        if (this.rootDataView === null) {
+          return undefined;
+        }
+        let value = this.rootDataView;
+        for (let i = 0; i < path.length; i++) {
+          if (value === null || typeof value !== "object") {
+            return undefined;
+          }
+          value = value[path[i]];
+        }
+        return value;
+      },
+      onTreeRunBehavior(payload) {
+        if (!payload || !payload.behavior) {
+          return;
+        }
+        if (Array.isArray(payload.node)) {
+          this.executeBehaviorOnArrayAtPath(payload.behavior, payload.path);
+          return;
+        }
+        this.executeBehaviorOnNode(payload.behavior, payload.node);
+      },
+      executeBehaviorOnArrayAtPath(behavior, path) {
+        const rows = this.getViewValueAtPath(path);
+        const itemClass = this.arrayItemClassForPath(path);
+        this.executeBehaviorOnArrayRows(behavior, rows, itemClass);
+      },
+      executeBehaviorOnArrayRows(behavior, rows, arrayItemClassName) {
+        if (!behavior || !Array.isArray(rows)) {
+          return;
+        }
+        if (behavior.type === "pieChart") {
+          if (!arrayItemClassName || !this.behaviorAllowedForClass(behavior, arrayItemClassName)) {
+            this.showToast("Grafico Pizza disponivel apenas para niveis de lista.", "error");
+            return;
+          }
+          const pieData = this.resolvePieChartData(behavior, rows);
+          if (!pieData || !pieData.labels.length) {
+            this.showToast("Grafico Pizza sem dados validos para exibir.", "error");
+            return;
+          }
+          this.activeBehaviorModal = {
+            visible: true,
+            title: behavior.name || "Grafico Pizza",
+            summary: pieData.labels.length + " grupo(s) encontrado(s).",
+            mapUrl: "",
+            embedUrl: "",
+            points: [],
+            kind: "pie",
+            chartData: pieData
+          };
+          this.$nextTick(() => this.renderBehaviorChart());
+          return;
+        }
+        if (behavior.type !== "marker") {
+          return;
+        }
+        const points = [];
+        for (let i = 0; i < rows.length; i++) {
+          const item = rows[i];
+          if (!item || typeof item !== "object" || Array.isArray(item)) {
+            continue;
+          }
+          const coords = this.resolveMarkerLatLng(behavior, item);
+          if (coords) {
+            points.push(coords);
+          }
+        }
+        if (!points.length) {
+          this.showToast("Nenhum marcador valido encontrado nesta lista.", "error");
+          return;
+        }
+        const urls = this.buildGoogleMapsListUrls(points);
+        this.activeBehaviorModal = {
+          visible: true,
+          title: (behavior.name || "Marker") + " (lista)",
+          summary: points.length + " marcador(es) conectados em sequencia.",
+          mapUrl: urls.mapUrl,
+          embedUrl: urls.embedUrl,
+          points: points,
+          kind: "map",
+          chartData: null
+        };
+        this.$nextTick(() => this.renderBehaviorMap());
       },
       tableRowBehaviors(rowItem) {
         const className = this.currentArrayItemClass;
@@ -1961,9 +2129,11 @@
       }
     },
     mounted() {
-      document.body.classList.add("theme-dark");
+      this.loadUiSessionPreferences();
+      this.applyThemeClass();
       this.loadGlobalSettings();
       this.loadProfilesFromStorage();
+      this.persistUiSessionPreferences();
       const self = this;
       this._docCloseContext = function (e) {
         const menu = self.$refs.rowContextMenuEl;
