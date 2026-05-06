@@ -6,7 +6,9 @@
       nodeKey: { type: String, required: true },
       path: { type: Array, required: true },
       expandedState: { type: Object, required: true },
-      activePath: { type: Array, required: true }
+      activePath: { type: Array, required: true },
+      valuePreviewResolver: { type: Function, default: null },
+      valueClassResolver: { type: Function, default: null }
     },
     methods: {
       nodePath(childKey) {
@@ -36,6 +38,9 @@
         return Object.entries(value);
       },
       valueClass(value) {
+        if (typeof this.valueClassResolver === "function") {
+          return this.valueClassResolver(this.path, value);
+        }
         if (typeof value === "string") return "value-string";
         if (typeof value === "number") return "value-number";
         if (typeof value === "boolean") return "value-bool";
@@ -43,6 +48,9 @@
         return "";
       },
       valuePreview(value) {
+        if (typeof this.valuePreviewResolver === "function") {
+          return this.valuePreviewResolver(this.path, value);
+        }
         if (Array.isArray(value)) return "[" + value.length + "]";
         if (value && typeof value === "object") return "{" + Object.keys(value).length + "}";
         if (typeof value === "string") return '"' + value + '"';
@@ -74,6 +82,8 @@
             :path="nodePath(childKey)"
             :expanded-state="expandedState"
             :active-path="activePath"
+            :value-preview-resolver="valuePreviewResolver"
+            :value-class-resolver="valueClassResolver"
             @toggle="$emit('toggle', $event)"
             @select="$emit('select', $event)"
           ></json-node>

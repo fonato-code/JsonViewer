@@ -69,7 +69,91 @@
       <span class="sidebar-edge-tab-label">Entrada</span>
     </button>
 
-    <div class="app-workspace" :class="{ 'app-workspace--sidebar-closed': inputPanelCollapsed }">
+    <aside class="rules-sidebar" :class="{ 'rules-sidebar--open': !rightPanelCollapsed }" aria-label="Regras de exibicao">
+      <div class="rules-sidebar-panel d-flex flex-column h-100">
+        <header class="rules-sidebar-head px-3 py-2 d-flex align-items-center justify-content-between flex-shrink-0">
+          <span class="rules-sidebar-title">Classes & Regras</span>
+          <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 border-0" @click="collapseRightPanel"
+            title="Fechar painel de regras">
+            <i class="far fa-times"></i>
+          </button>
+        </header>
+        <div class="rules-sidebar-body flex-grow-1 min-h-0 d-flex flex-column">
+          <div v-if="rootDataView === null" class="small text-secondary p-3">
+            Processar um JSON para mapear classes e propriedades.
+          </div>
+          <template v-else>
+            <div class="rules-profile-block p-3 border-bottom">
+              <label class="small text-secondary mb-1 d-block">Perfil</label>
+              <div class="input-group input-group-sm mb-2">
+                <input type="text" class="form-control" v-model.trim="profileNameInput" placeholder="Nome do perfil">
+                <button class="btn btn-outline-primary" type="button" @click="saveCurrentProfile">Salvar</button>
+              </div>
+              <div v-if="suggestedProfiles.length" class="small">
+                <span class="text-secondary d-block mb-1">Sugeridos:</span>
+                <div class="d-flex flex-wrap gap-1">
+                  <button v-for="profile in suggestedProfiles" :key="'sg-' + profile.name" type="button"
+                    class="btn btn-xs btn-outline-secondary" @click="applyProfile(profile.name)">
+                    {{ profile.name }}
+                  </button>
+                </div>
+              </div>
+              <div v-if="savedProfiles.length" class="mt-2 d-flex flex-wrap gap-1">
+                <button v-for="profile in savedProfiles" :key="'pf-' + profile.name" type="button"
+                  class="btn btn-xs btn-outline-dark" @click="applyProfile(profile.name)">
+                  {{ profile.name }}
+                </button>
+              </div>
+            </div>
+            <div class="rules-class-block p-3 border-bottom">
+              <label class="small text-secondary mb-1 d-block">Classes</label>
+              <select class="form-select form-select-sm" v-model="selectedSchemaClass" @change="ensureSelectedProperty">
+                <option v-for="cls in schemaClasses" :key="'class-' + cls.name" :value="cls.name">{{ cls.name }}</option>
+              </select>
+            </div>
+            <div class="rules-prop-block p-3 flex-grow-1 min-h-0 d-flex flex-column">
+              <label class="small text-secondary mb-1 d-block">Propriedades</label>
+              <div class="rules-property-list mb-3">
+                <button v-for="prop in (selectedSchemaClassInfo ? selectedSchemaClassInfo.properties : [])"
+                  :key="'prop-' + prop.name" type="button" class="rules-property-item"
+                  :class="{ active: selectedSchemaProperty === prop.name }" @click="selectedSchemaProperty = prop.name">
+                  <span>{{ prop.name }}</span>
+                  <small class="text-secondary">{{ prop.types.join(', ') }}</small>
+                </button>
+              </div>
+              <div v-if="selectedRule && selectedSchemaPropertyInfo" class="rules-editor mt-auto">
+                <label class="small text-secondary mb-1 d-block">Exibicao de {{ selectedSchemaProperty }}</label>
+                <select class="form-select form-select-sm mb-2" :value="selectedRule.displayType"
+                  @change="setSelectedRuleDisplayType($event.target.value)">
+                  <option value="auto">Auto</option>
+                  <option value="date">Data</option>
+                  <option value="text">Texto</option>
+                  <option value="number">Numero</option>
+                </select>
+                <div v-if="selectedRule.displayType === 'date'">
+                  <label class="small text-secondary mb-1 d-block">Formato de data</label>
+                  <select class="form-select form-select-sm" v-model="selectedRule.dateFormat">
+                    <option value="iso">ISO</option>
+                    <option value="br-date">DD/MM/YYYY</option>
+                    <option value="br-datetime">DD/MM/YYYY HH:mm:ss</option>
+                    <option value="us-date">MM/DD/YYYY</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </aside>
+
+    <button v-if="rightPanelCollapsed" type="button" class="sidebar-edge-tab sidebar-edge-tab--right" @click="expandRightPanel"
+      title="Abrir regras de exibicao">
+      <i class="far fa-sliders-h"></i>
+      <span class="sidebar-edge-tab-label">Regras</span>
+    </button>
+
+    <div class="app-workspace"
+      :class="{ 'app-workspace--sidebar-closed': inputPanelCollapsed, 'app-workspace--rules-collapsed': rightPanelCollapsed }">
       <main class="viewer-main">
         <article class="surface viewer-panel h-100 d-flex flex-column min-h-0">
           <div class="surface-head px-3 py-2 d-flex align-items-center justify-content-between flex-wrap gap-2 flex-shrink-0">
@@ -200,13 +284,13 @@
                           <td v-for="col in tableColumnKeys" :key="'c-' + rowMeta.index + '-' + col" class="table-data-cell">
                             <button v-if="isTableCellDrillable(rowMeta.item, col)" type="button"
                               class="table-cell-drill"
-                              :class="tableCellClass(tableCellRaw(rowMeta.item, col))"
+                              :class="tableCellClassDisplay(rowMeta.item, col)"
                               :title="tableCellDrillTitle(rowMeta.item, col)"
                               @click="drillTableCell(rowMeta, col)">
-                              {{ formatTableCell(tableCellRaw(rowMeta.item, col)) }}
+                              {{ formatTableCellDisplay(rowMeta.item, col) }}
                             </button>
-                            <span v-else class="table-cell-text" :class="tableCellClass(getCellRaw(rowMeta.item, col))">
-                              {{ formatTableCell(getCellRaw(rowMeta.item, col)) }}
+                            <span v-else class="table-cell-text" :class="tableCellClassDisplay(rowMeta.item, col)">
+                              {{ formatTableCellDisplay(rowMeta.item, col) }}
                             </span>
                           </td>
                         </tr>
@@ -231,7 +315,8 @@
               </div>
               <div v-else class="tree-wrap flex-grow-1 min-h-0">
                 <json-node :node="currentNode" :node-key="currentNodeLabel" :path="selectedPath"
-                  :expanded-state="expandedState" :active-path="selectedPath" @toggle="toggleExpand"
+                  :expanded-state="expandedState" :active-path="selectedPath"
+                  :value-preview-resolver="treeValuePreview" :value-class-resolver="treeValueClass" @toggle="toggleExpand"
                   @select="selectPath"></json-node>
               </div>
             </div>

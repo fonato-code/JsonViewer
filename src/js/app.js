@@ -1,4 +1,6 @@
 (function () {
+  const PROFILE_STORAGE_KEY = "jsonViewer.classProfiles.v1";
+
   const app = Vue.createApp({
     components: {
       JsonNode: window.JsonNodeComponent
@@ -9,10 +11,14 @@
         jsonText: "",
         jsonError: "",
         rootData: null,
+        rootDataOriginal: null,
+        rootDataView: null,
+        transformedDraft: null,
         selectedPath: [],
         expandedState: {},
         userTreeExpandedPaths: {},
         inputPanelCollapsed: false,
+        rightPanelCollapsed: true,
         tableViewEnabled: false,
         tablePageSize: 10,
         tablePage: 1,
@@ -25,12 +31,24 @@
           x: 0,
           y: 0,
           item: null
-        }
+        },
+        schemaModel: {
+          classes: [],
+          objectClassByNormPath: {},
+          arrayItemClassByNormPath: {},
+          signature: "",
+          schemaKeys: []
+        },
+        viewRules: {},
+        selectedSchemaClass: "",
+        selectedSchemaProperty: "",
+        profileNameInput: "",
+        savedProfiles: []
       };
     },
     computed: {
       inputStatus() {
-        return this.rootData === null ? "Aguardando dados" : "JSON carregado";
+        return this.rootDataOriginal === null ? "Aguardando dados" : "JSON carregado";
       },
       themeIcon() {
         return this.theme === "dark" ? "far fa-sun" : "far fa-moon";
@@ -39,8 +57,8 @@
         return this.theme === "dark" ? "Trocar para tema claro" : "Trocar para tema escuro";
       },
       currentNode() {
-        if (this.rootData === null) return null;
-        let value = this.rootData;
+        if (this.rootDataView === null) return null;
+        let value = this.rootDataView;
         for (const key of this.selectedPath) {
           if (value === null || typeof value !== "object") break;
           value = value[key];
@@ -56,9 +74,7 @@
       },
       currentNodeChildren() {
         if (this.currentNode && typeof this.currentNode === "object") {
-          return Array.isArray(this.currentNode)
-            ? this.currentNode.length
-            : Object.keys(this.currentNode).length;
+          return Array.isArray(this.currentNode) ? this.currentNode.length : Object.keys(this.currentNode).length;
         }
         return 0;
       },
@@ -73,11 +89,11 @@
         return items;
       },
       nodeTypeSummary() {
-        if (this.rootData === null) return "Sem estrutura";
-        return this.readableType(this.rootData);
+        if (this.rootDataView === null) return "Sem estrutura";
+        return this.readableType(this.rootDataView);
       },
       viewerLevelSummary() {
-        if (this.rootData === null) return "Sem estrutura";
+        if (this.rootDataView === null) return "Sem estrutura";
         const t = this.readableType(this.currentNode);
         if (Array.isArray(this.currentNode)) {
           return t + " (" + this.currentNode.length + ")";
@@ -85,7 +101,7 @@
         return t;
       },
       canUseTableView() {
-        return this.rootData !== null && Array.isArray(this.currentNode);
+        return this.rootDataView !== null && Array.isArray(this.currentNode);
       },
       showTableView() {
         return this.tableViewEnabled && this.canUseTableView;
@@ -168,10 +184,41 @@
           }
           result.leaves += 1;
         };
-        if (this.rootData !== null) {
-          visit(this.rootData);
+        if (this.rootDataView !== null) {
+          visit(this.rootDataView);
         }
         return result;
+      },
+      schemaClasses() {
+        return this.schemaModel.classes || [];
+      },
+      selectedSchemaClassInfo() {
+        if (!this.selectedSchemaClass) return null;
+        for (let i = 0; i < this.schemaClasses.length; i++) {
+          if (this.schemaClasses[i].name === this.selectedSchemaClass) {
+            return this.schemaClasses[i];
+          }
+        }
+        return null;
+      },
+      selectedSchemaPropertyInfo() {
+        const classInfo = this.selectedSchemaClassInfo;
+        if (!classInfo || !this.selectedSchemaProperty) return null;
+        return classInfo.properties.find((p) => p.name === this.selectedSchemaProperty) || null;
+      },
+      selectedRule() {
+        if (!this.selectedSchemaClass || !this.selectedSchemaProperty) return null;
+        return this.ensureRule(this.selectedSchemaClass, this.selectedSchemaProperty);
+      },
+      currentArrayItemClass() {
+        if (!Array.isArray(this.currentNode)) return "";
+        return this.schemaModel.arrayItemClassByNormPath[this.normalizePath(this.selectedPath)] || "";
+      },
+      suggestedProfiles() {
+        if (!this.schemaModel.signature) return [];
+        return this.savedProfiles
+          .filter((profile) => this.isProfileCompatible(profile))
+          .sort((a, b) => this.profileCompatibilityScore(b) - this.profileCompatibilityScore(a));
       },
       needsTableColumnWidthInit() {
         if (!this.showTableView || !this.tableColumnKeys.length) {
@@ -222,6 +269,251 @@
         if (value === null) return "null";
         return typeof value;
       },
+      isNumericSegment(segment) {
+        return typeof segment === "number" || /^[0-9]+$/.test(String(segment));
+      },
+      normalizePath(path) {
+        return path
+          .map((segment) => (this.isNumericSegment(segment) ? "*" : String(segment)))
+          .join(".");
+      },
+      cloneJson(value) {
+        return value == null ? value : JSON.parse(JSON.stringify(value));
+      },
+      defaultRule() {
+        return { enabled: false, displayType: "auto", dateFormat: "iso" };
+      },
+      ensureRule(className, propertyName) {
+        if (!className || !propertyName) {
+          return null;
+        }
+        if (!this.viewRules[className]) {
+          this.viewRules = Object.assign({}, this.viewRules, { [className]: {} });
+        }
+        if (!this.viewRules[className][propertyName]) {
+          this.viewRules[className] = Object.assign({}, this.viewRules[className], {
+            [propertyName]: this.defaultRule()
+          });
+        }
+        return this.viewRules[className][propertyName];
+      },
+      getRule(className, propertyName) {
+        if (!className || !propertyName) return null;
+        const byClass = this.viewRules[className];
+        return byClass ? byClass[propertyName] || null : null;
+      },
+      inferSchemaModel(rootValue) {
+        const classesByName = {};
+        const objectClassByNormPath = {};
+        const arrayItemClassByNormPath = {};
+        const maxArraySamples = 200;
+        const self = this;
+
+        const ensureClass = function (className) {
+          if (!classesByName[className]) {
+            classesByName[className] = {
+              name: className,
+              propertyMap: {}
+            };
+          }
+          return classesByName[className];
+        };
+        const typeOfValue = function (value) {
+          if (Array.isArray(value)) return "array";
+          if (value === null) return "null";
+          return typeof value;
+        };
+        const maybeDateLike = function (value) {
+          if (typeof value !== "string") return false;
+          const text = value.trim();
+          if (!text) return false;
+          if (
+            !(
+              /[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(text) ||
+              /[0-9]{4}\/[0-9]{2}\/[0-9]{2}/.test(text) ||
+              /[0-9]{2}\/[0-9]{2}\/[0-9]{4}/.test(text)
+            )
+          ) {
+            return false;
+          }
+          return !isNaN(Date.parse(text));
+        };
+        const noteProperty = function (className, propName, value) {
+          const cls = ensureClass(className);
+          if (!cls.propertyMap[propName]) {
+            cls.propertyMap[propName] = {
+              name: propName,
+              types: {},
+              occurrences: 0,
+              dateLikeSamples: 0
+            };
+          }
+          const prop = cls.propertyMap[propName];
+          prop.occurrences += 1;
+          prop.types[typeOfValue(value)] = true;
+          if (maybeDateLike(value)) {
+            prop.dateLikeSamples += 1;
+          }
+        };
+        const walkObject = function (obj, objectPath, className) {
+          objectClassByNormPath[self.normalizePath(objectPath)] = className;
+          ensureClass(className);
+          Object.keys(obj).forEach((key) => {
+            const val = obj[key];
+            noteProperty(className, key, val);
+            if (val && typeof val === "object" && !Array.isArray(val)) {
+              walkObject(val, objectPath.concat(key), className + "." + key);
+              return;
+            }
+            if (Array.isArray(val)) {
+              const arrayPath = objectPath.concat(key);
+              const itemClass = className + "." + key;
+              arrayItemClassByNormPath[self.normalizePath(arrayPath)] = itemClass;
+              const sampleCount = Math.min(val.length, maxArraySamples);
+              for (let j = 0; j < sampleCount; j++) {
+                const item = val[j];
+                if (item && typeof item === "object" && !Array.isArray(item)) {
+                  walkObject(item, arrayPath.concat(String(j)), itemClass);
+                }
+              }
+            }
+          });
+        };
+
+        if (rootValue && typeof rootValue === "object" && !Array.isArray(rootValue)) {
+          walkObject(rootValue, [], "root");
+        } else if (Array.isArray(rootValue)) {
+          arrayItemClassByNormPath[""] = "root.item";
+          const sampleCount = Math.min(rootValue.length, maxArraySamples);
+          for (let i = 0; i < sampleCount; i++) {
+            const item = rootValue[i];
+            if (item && typeof item === "object" && !Array.isArray(item)) {
+              walkObject(item, [String(i)], "root.item");
+            }
+          }
+        }
+
+        const classes = Object.values(classesByName)
+          .map((cls) => {
+            const properties = Object.values(cls.propertyMap)
+              .map((prop) => ({
+                name: prop.name,
+                types: Object.keys(prop.types).sort(),
+                occurrences: prop.occurrences,
+                dateLike: prop.dateLikeSamples > 0
+              }))
+              .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+            return { name: cls.name, properties: properties };
+          })
+          .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+
+        const schemaKeys = [];
+        classes.forEach((cls) => {
+          cls.properties.forEach((prop) => {
+            schemaKeys.push(cls.name + "." + prop.name);
+          });
+        });
+        schemaKeys.sort();
+        return {
+          classes: classes,
+          objectClassByNormPath: objectClassByNormPath,
+          arrayItemClassByNormPath: arrayItemClassByNormPath,
+          signature: schemaKeys.join("|"),
+          schemaKeys: schemaKeys
+        };
+      },
+      getClassNameForObjectPath(path) {
+        return this.schemaModel.objectClassByNormPath[this.normalizePath(path)] || "";
+      },
+      ruleContextFromPath(path) {
+        if (!path || path.length === 0) {
+          return null;
+        }
+        const property = String(path[path.length - 1]);
+        if (this.isNumericSegment(property)) {
+          return null;
+        }
+        const className = this.getClassNameForObjectPath(path.slice(0, -1));
+        if (!className) return null;
+        return { className: className, propertyName: property };
+      },
+      parseDateInput(value) {
+        if (typeof value !== "string" && typeof value !== "number") {
+          return null;
+        }
+        const date = new Date(value);
+        return isNaN(date.getTime()) ? null : date;
+      },
+      formatDateByMode(date, mode) {
+        const pad = function (v) {
+          return String(v).padStart(2, "0");
+        };
+        const yyyy = date.getFullYear();
+        const mm = pad(date.getMonth() + 1);
+        const dd = pad(date.getDate());
+        const hh = pad(date.getHours());
+        const mi = pad(date.getMinutes());
+        const ss = pad(date.getSeconds());
+        if (mode === "br-date") return dd + "/" + mm + "/" + yyyy;
+        if (mode === "br-datetime") return dd + "/" + mm + "/" + yyyy + " " + hh + ":" + mi + ":" + ss;
+        if (mode === "us-date") return mm + "/" + dd + "/" + yyyy;
+        return date.toISOString();
+      },
+      formatByRule(value, ruleContext) {
+        if (!ruleContext) return null;
+        const rule = this.getRule(ruleContext.className, ruleContext.propertyName);
+        if (!rule || !rule.enabled || rule.displayType === "auto") return null;
+        if (rule.displayType === "date") {
+          const date = this.parseDateInput(value);
+          if (!date) return null;
+          return this.formatDateByMode(date, rule.dateFormat || "iso");
+        }
+        if (rule.displayType === "text") {
+          return String(value);
+        }
+        if (rule.displayType === "number") {
+          const num = Number(value);
+          return isFinite(num) ? String(num) : null;
+        }
+        return null;
+      },
+      treeValuePreview(path, value) {
+        if (Array.isArray(value)) return "[" + value.length + "]";
+        if (value && typeof value === "object") return "{" + Object.keys(value).length + "}";
+        const transformed = this.formatByRule(value, this.ruleContextFromPath(path));
+        const finalValue = transformed != null ? transformed : value;
+        if (typeof finalValue === "string") return '"' + finalValue + '"';
+        if (finalValue === null) return "null";
+        return String(finalValue);
+      },
+      treeValueClass(path, value) {
+        const transformed = this.formatByRule(value, this.ruleContextFromPath(path));
+        const finalValue = transformed != null ? transformed : value;
+        if (typeof finalValue === "string") return "value-string";
+        if (typeof finalValue === "number") return "value-number";
+        if (typeof finalValue === "boolean") return "value-bool";
+        if (finalValue === null) return "value-null";
+        return "";
+      },
+      retainOnlyCompatibleRules() {
+        const allowed = {};
+        this.schemaClasses.forEach((cls) => {
+          allowed[cls.name] = {};
+          cls.properties.forEach((prop) => {
+            allowed[cls.name][prop.name] = true;
+          });
+        });
+        const next = {};
+        Object.keys(this.viewRules).forEach((className) => {
+          if (!allowed[className]) return;
+          Object.keys(this.viewRules[className]).forEach((propName) => {
+            if (!allowed[className][propName]) return;
+            if (!next[className]) next[className] = {};
+            next[className][propName] = this.viewRules[className][propName];
+          });
+        });
+        this.viewRules = next;
+      },
       toggleTheme() {
         this.theme = this.theme === "dark" ? "light" : "dark";
         document.body.classList.toggle("theme-dark", this.theme === "dark");
@@ -232,6 +524,13 @@
         try {
           const parsed = JSON.parse(this.jsonText);
           this.rootData = parsed;
+          this.rootDataOriginal = parsed;
+          this.rootDataView = parsed;
+          this.transformedDraft = this.cloneJson(parsed);
+          this.schemaModel = this.inferSchemaModel(parsed);
+          this.retainOnlyCompatibleRules();
+          this.selectedSchemaClass = this.schemaClasses.length ? this.schemaClasses[0].name : "";
+          this.ensureSelectedProperty();
           this.selectedPath = [];
           this.expandedState = { "[]": true };
           this.userTreeExpandedPaths = {};
@@ -245,6 +544,16 @@
           });
         } catch (error) {
           this.rootData = null;
+          this.rootDataOriginal = null;
+          this.rootDataView = null;
+          this.transformedDraft = null;
+          this.schemaModel = {
+            classes: [],
+            objectClassByNormPath: {},
+            arrayItemClassByNormPath: {},
+            signature: "",
+            schemaKeys: []
+          };
           this.jsonError = "JSON invalido: " + error.message;
         }
       },
@@ -252,10 +561,24 @@
         this.jsonText = "";
         this.jsonError = "";
         this.rootData = null;
+        this.rootDataOriginal = null;
+        this.rootDataView = null;
+        this.transformedDraft = null;
         this.selectedPath = [];
         this.expandedState = {};
         this.userTreeExpandedPaths = {};
         this.inputPanelCollapsed = false;
+        this.rightPanelCollapsed = true;
+        this.schemaModel = {
+          classes: [],
+          objectClassByNormPath: {},
+          arrayItemClassByNormPath: {},
+          signature: "",
+          schemaKeys: []
+        };
+        this.viewRules = {};
+        this.selectedSchemaClass = "";
+        this.selectedSchemaProperty = "";
         this.tableViewEnabled = false;
         this.tablePage = 1;
         this.tablePageSize = 10;
@@ -329,10 +652,10 @@
         return true;
       },
       nodeAtPath(path) {
-        if (this.rootData === null) {
+        if (this.rootDataView === null) {
           return undefined;
         }
-        let v = this.rootData;
+        let v = this.rootDataView;
         for (let i = 0; i < path.length; i++) {
           if (v === null || typeof v !== "object") {
             return undefined;
@@ -424,6 +747,33 @@
       expandInputPanel() {
         this.inputPanelCollapsed = false;
       },
+      collapseRightPanel() {
+        this.rightPanelCollapsed = true;
+      },
+      expandRightPanel() {
+        this.rightPanelCollapsed = false;
+      },
+      selectSchemaClass(className) {
+        this.selectedSchemaClass = className;
+        this.ensureSelectedProperty();
+      },
+      ensureSelectedProperty() {
+        const classInfo = this.selectedSchemaClassInfo;
+        if (!classInfo || !classInfo.properties.length) {
+          this.selectedSchemaProperty = "";
+          return;
+        }
+        const found = classInfo.properties.find((p) => p.name === this.selectedSchemaProperty);
+        if (!found) {
+          this.selectedSchemaProperty = classInfo.properties[0].name;
+        }
+      },
+      setSelectedRuleDisplayType(nextType) {
+        const rule = this.selectedRule;
+        if (!rule) return;
+        rule.displayType = nextType;
+        rule.enabled = nextType !== "auto";
+      },
       getCellRaw(item, col) {
         if (col === "__primitive") {
           return item;
@@ -438,7 +788,9 @@
         if (item && typeof item === "object" && !Array.isArray(item)) {
           return Object.keys(item)
             .map(function (k) {
-              return k + ":" + self.cellSearchSnippet(item[k]);
+              const ctx = self.currentArrayItemClass ? { className: self.currentArrayItemClass, propertyName: k } : null;
+              const transformed = self.formatByRule(item[k], ctx);
+              return k + ":" + self.cellSearchSnippet(transformed != null ? transformed : item[k]);
             })
             .join(" ");
         }
@@ -506,6 +858,18 @@
         }
         return String(val);
       },
+      formatTableCellDisplay(item, col) {
+        const raw = this.tableCellRaw(item, col);
+        if (raw && typeof raw === "object") {
+          return this.formatTableCell(raw);
+        }
+        let ctx = null;
+        if (col !== "__primitive" && this.currentArrayItemClass) {
+          ctx = { className: this.currentArrayItemClass, propertyName: col };
+        }
+        const transformed = this.formatByRule(raw, ctx);
+        return this.formatTableCell(transformed != null ? transformed : raw);
+      },
       tableCellClass(val) {
         if (typeof val === "string") {
           return "value-string";
@@ -520,6 +884,18 @@
           return "value-null";
         }
         return "text-secondary";
+      },
+      tableCellClassDisplay(item, col) {
+        const raw = this.tableCellRaw(item, col);
+        if (raw && typeof raw === "object") {
+          return this.tableCellClass(raw);
+        }
+        let ctx = null;
+        if (col !== "__primitive" && this.currentArrayItemClass) {
+          ctx = { className: this.currentArrayItemClass, propertyName: col };
+        }
+        const transformed = this.formatByRule(raw, ctx);
+        return this.tableCellClass(transformed != null ? transformed : raw);
       },
       tableHeaderLabel(col) {
         if (col === "__primitive") {
@@ -542,9 +918,7 @@
           return "";
         }
         const raw = this.tableCellRaw(item, col);
-        return Array.isArray(raw)
-          ? "Abrir este array (modo tabela)"
-          : "Abrir este objeto (modo arvore)";
+        return Array.isArray(raw) ? "Abrir este array (modo tabela)" : "Abrir este objeto (modo arvore)";
       },
       drillTableCell(rowMeta, col) {
         const raw = this.tableCellRaw(rowMeta.item, col);
@@ -634,10 +1008,7 @@
       },
       tableColPixelWidth(col) {
         const w = this.tableColumnWidths[col];
-        if (w != null) {
-          return w;
-        }
-        return 140;
+        return w != null ? w : 140;
       },
       measurePlainTextWidth(text) {
         let el = this._tableMeasureEl;
@@ -652,11 +1023,10 @@
         return el.getBoundingClientRect().width;
       },
       measureColumnContentWidth(col) {
-        let maxW = this.measurePlainTextWidth(this.tableHeaderLabel(col) + "  \u2195");
+        let maxW = this.measurePlainTextWidth(this.tableHeaderLabel(col) + "  ↕");
         const rows = this.tableFilteredRowsMeta;
         for (let i = 0; i < rows.length; i++) {
-          const raw = this.getCellRaw(rows[i].item, col);
-          const txt = this.formatTableCell(raw);
+          const txt = this.formatTableCellDisplay(rows[i].item, col);
           maxW = Math.max(maxW, this.measurePlainTextWidth(txt));
         }
         return Math.ceil(maxW);
@@ -710,6 +1080,77 @@
       onColResizeDblClick(e, col) {
         this.autoFitTableColumn(col);
       },
+      profileCompatibilityScore(profile) {
+        if (!profile || !profile.schemaSignature) return 0;
+        if (profile.schemaSignature === this.schemaModel.signature) return 1;
+        const current = {};
+        (this.schemaModel.schemaKeys || []).forEach((k) => {
+          current[k] = true;
+        });
+        const profileKeys = profile.schemaKeys || [];
+        if (!profileKeys.length || !this.schemaModel.schemaKeys.length) return 0;
+        let matches = 0;
+        profileKeys.forEach((k) => {
+          if (current[k]) matches += 1;
+        });
+        return matches / Math.max(profileKeys.length, this.schemaModel.schemaKeys.length);
+      },
+      isProfileCompatible(profile) {
+        return this.profileCompatibilityScore(profile) >= 0.5;
+      },
+      loadProfilesFromStorage() {
+        try {
+          const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+          if (!raw) {
+            this.savedProfiles = [];
+            return;
+          }
+          const parsed = JSON.parse(raw);
+          this.savedProfiles = Array.isArray(parsed) ? parsed : [];
+        } catch (err) {
+          this.savedProfiles = [];
+        }
+      },
+      persistProfilesToStorage() {
+        try {
+          localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(this.savedProfiles));
+        } catch (err) {
+          // no-op
+        }
+      },
+      saveCurrentProfile() {
+        const name = this.profileNameInput.trim();
+        if (!name) return;
+        const now = new Date().toISOString();
+        const next = this.savedProfiles.slice();
+        const idx = next.findIndex((p) => p.name === name);
+        const profile = {
+          name: name,
+          createdAt: idx >= 0 ? next[idx].createdAt : now,
+          updatedAt: now,
+          schemaSignature: this.schemaModel.signature,
+          schemaKeys: (this.schemaModel.schemaKeys || []).slice(),
+          rules: this.cloneJson(this.viewRules)
+        };
+        if (idx >= 0) {
+          next[idx] = profile;
+        } else {
+          next.push(profile);
+        }
+        next.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+        this.savedProfiles = next;
+        this.persistProfilesToStorage();
+      },
+      applyProfile(profileName) {
+        const profile = this.savedProfiles.find((p) => p.name === profileName);
+        if (!profile) return;
+        this.viewRules = this.cloneJson(profile.rules || {});
+        this.retainOnlyCompatibleRules();
+      },
+      deleteProfile(profileName) {
+        this.savedProfiles = this.savedProfiles.filter((p) => p.name !== profileName);
+        this.persistProfilesToStorage();
+      },
       escapeNavigationIgnoredTarget(target) {
         if (!target || typeof target.closest !== "function") {
           return false;
@@ -722,17 +1163,7 @@
           return false;
         }
         const type = (input.getAttribute("type") || "text").toLowerCase();
-        const nonTextTypes = [
-          "button",
-          "checkbox",
-          "radio",
-          "submit",
-          "reset",
-          "file",
-          "hidden",
-          "range",
-          "color"
-        ];
+        const nonTextTypes = ["button", "checkbox", "radio", "submit", "reset", "file", "hidden", "range", "color"];
         return nonTextTypes.indexOf(type) === -1;
       },
       onGlobalEscapeKeydown(e) {
@@ -742,7 +1173,7 @@
         if (this.escapeNavigationIgnoredTarget(e.target)) {
           return;
         }
-        if (this.rootData === null) {
+        if (this.rootDataView === null) {
           return;
         }
         if (this.rowContextMenu.visible) {
@@ -759,6 +1190,7 @@
     },
     mounted() {
       document.body.classList.add("theme-dark");
+      this.loadProfilesFromStorage();
       const self = this;
       this._docCloseContext = function (e) {
         const menu = self.$refs.rowContextMenuEl;
