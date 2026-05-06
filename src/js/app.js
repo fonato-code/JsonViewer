@@ -1504,6 +1504,25 @@
             plugins: {
               legend: {
                 position: "bottom"
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    const values = ctx.dataset.data || [];
+                    const idx = ctx.dataIndex;
+                    const raw = values[idx];
+                    const value = typeof raw === "number" ? raw : Number(raw);
+                    const safe = isFinite(value) ? value : 0;
+                    let total = 0;
+                    for (let i = 0; i < values.length; i++) {
+                      const n = typeof values[i] === "number" ? values[i] : Number(values[i]);
+                      total += isFinite(n) ? n : 0;
+                    }
+                    const pct = total > 0 ? ((100 * safe) / total).toFixed(1) : "0.0";
+                    const shown = isFinite(value) ? value : raw;
+                    return shown + " (" + pct + "%)";
+                  }
+                }
               }
             }
           }

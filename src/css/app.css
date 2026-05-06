@@ -968,16 +968,12 @@ body.theme-light .rules-behavior-block::-webkit-scrollbar-thumb {
   vertical-align: bottom;
   text-decoration: underline;
   text-underline-offset: 2px;
-  font-weight: 600;
-  color: var(--accent);
+  font-weight: 500;
+  /* Cor vem das classes value-* (value-string, value-number, …), igual ao treeview */
 }
 
 .table-cell-link:hover {
-  filter: brightness(1.1);
-}
-
-body.theme-light .table-cell-link {
-  color: #0d6efd;
+  filter: brightness(1.12);
 }
 
 .table-cell-drill {
