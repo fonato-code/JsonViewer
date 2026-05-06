@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-bs-theme="dark">
 
 <head>
   <meta charset="UTF-8" />
@@ -106,11 +106,11 @@
               </div>
               <div v-if="savedProfiles.length" class="mt-2 d-flex flex-wrap gap-1 align-items-center">
                 <div v-for="profile in savedProfiles" :key="'pf-' + profile.name" class="profile-chip d-inline-flex align-items-stretch">
-                  <button type="button" class="profile-chip-apply btn btn-xs btn-outline-dark" @click="applyProfile(profile.name)"
+                  <button type="button" class="profile-chip-apply btn btn-xs btn-outline-secondary" @click="applyProfile(profile.name)"
                     :title="'Aplicar perfil ' + profile.name">
                     {{ profile.name }}
                   </button>
-                  <button type="button" class="profile-chip-remove btn btn-xs btn-outline-danger" @click.stop="deleteProfile(profile.name)"
+                  <button type="button" class="profile-chip-remove btn btn-xs btn-outline-danger" @click.stop="requestDeleteProfile(profile.name)"
                     title="Excluir perfil" :aria-label="'Excluir perfil ' + profile.name">
                     <i class="far fa-times"></i>
                   </button>
@@ -246,8 +246,12 @@
                     <option v-for="prop in schemaTimelineXPropertyOptions" :key="'tlx-' + behavior.id + '-' + prop.name"
                       :value="prop.name">{{ prop.dateLike ? prop.name + ' (data)' : prop.name }}</option>
                   </select>
+                  <div v-if="!schemaTimelineXPropertyOptions.length" class="small text-warning mb-2">
+                    Nenhuma coluna de data detectada no schema. Use propriedades com valores que parecam data, ou tipos string/number
+                    com datas parseaveis.
+                  </div>
                   <label class="small text-secondary mb-1 d-block">Eixo Y (series numericas, uma ou mais)</label>
-                  <div class="rules-timeline-y-checks border rounded px-2 py-1" style="max-height: 9rem; overflow: auto;">
+                  <div class="rules-timeline-y-checks px-2 py-1">
                     <label v-for="prop in timelineYOptionsExcludingX(behavior)" :key="'tly-' + behavior.id + '-' + prop.name"
                       class="d-flex align-items-center gap-2 small mb-1 cursor-pointer">
                       <input class="form-check-input m-0 flex-shrink-0" type="checkbox" :value="prop.name"
@@ -255,8 +259,13 @@
                       <span>{{ prop.name }}</span>
                       <span class="text-secondary">({{ prop.types.join(', ') }})</span>
                     </label>
-                    <div v-if="!timelineYOptionsExcludingX(behavior).length" class="small text-secondary py-1">
-                      Nenhuma coluna disponivel (defina o eixo X ou adicione propriedades numericas).
+                    <div v-if="schemaTimelineXPropertyOptions.length && !timelineYOptionsExcludingX(behavior).length"
+                      class="small text-warning py-1">
+                      Nenhuma coluna numerica disponivel para o eixo Y (ou todas foram reservadas para o eixo X).
+                    </div>
+                    <div v-if="!schemaTimelineXPropertyOptions.length && !timelineYOptionsExcludingX(behavior).length"
+                      class="small text-secondary py-1">
+                      Defina o eixo X para listar colunas numericas como series.
                     </div>
                   </div>
                 </div>
@@ -278,7 +287,12 @@
       <main class="viewer-main">
         <article class="surface viewer-panel h-100 d-flex flex-column min-h-0">
           <div class="surface-head px-3 py-2 d-flex align-items-center justify-content-between flex-wrap gap-2 flex-shrink-0">
-            <span>Visualizador</span>
+            <span class="d-flex align-items-center gap-2">Visualizador
+              <button v-if="rootData !== null" type="button" class="btn btn-xs btn-outline-secondary btn-icon viewer-help-btn"
+                title="Atalhos do teclado" @click="openShortcutsModal" aria-label="Atalhos">
+                <i class="far fa-question-circle"></i>
+              </button>
+            </span>
             <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
               <template v-if="rootData !== null && !showTableView">
                 <button type="button" class="btn btn-sm btn-outline-secondary" @click="expandAllTree"
@@ -317,6 +331,38 @@
                   :disabled="selectedPath.length === 0">
                   <i class="far fa-level-up-alt me-1"></i> Subir
                 </button>
+              </div>
+
+              <div v-if="rootData !== null" class="viewer-tools-row mb-3 flex-shrink-0">
+                <div class="row g-2 align-items-start">
+                  <div class="col-12 col-lg-5">
+                    <label class="small text-secondary mb-1 d-block">Ir para JSON Path</label>
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control" v-model.trim="gotoPathInput" placeholder="Ex.: $.alerts[0] ou alerts.0.city"
+                        autocomplete="off" @keyup.enter="goToJsonPathFromInput">
+                      <button type="button" class="btn btn-outline-primary" @click="goToJsonPathFromInput">Ir</button>
+                    </div>
+                  </div>
+                  <div class="col-12 col-lg-7">
+                    <label class="small text-secondary mb-1 d-block">Buscar no JSON</label>
+                    <div class="global-search-wrap">
+                      <input type="search" class="form-control form-control-sm global-search-input" v-model.trim="globalSearchInput"
+                        placeholder="Texto na chave ou no valor (ate 100 resultados)" autocomplete="off" @input="scheduleGlobalSearch">
+                      <div v-if="globalSearchResults.length" class="global-search-results">
+                        <div class="global-search-results-list" role="listbox" aria-label="Resultados da busca">
+                          <button v-for="(hit, hIdx) in globalSearchResults" :key="'gs-' + hIdx + '-' + JSON.stringify(hit.path)"
+                            type="button" class="global-search-hit"
+                            role="option"
+                            @click="onGlobalSearchResultClick(hit)">
+                            <code class="global-search-hit-path">{{ formatJsonPathForClipboard(hit.path) }}</code>
+                            <span class="global-search-hit-preview">{{ hit.preview }}</span>
+                          </button>
+                        </div>
+                        <div v-if="globalSearchTruncated" class="global-search-truncated-note">Lista truncada (limite 100).</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div class="row g-2 mb-2 flex-shrink-0">
@@ -541,6 +587,44 @@
           <button v-if="activeBehaviorModal.kind === 'map'" type="button" class="btn btn-primary btn-sm" @click="openBehaviorMapLink">
             <i class="far fa-map-marked-alt me-1"></i>Abrir no Google Maps
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="profileDeleteConfirm.open" class="behavior-modal-backdrop" @click.self="closeProfileDeleteConfirm">
+      <div class="behavior-modal behavior-modal--narrow">
+        <div class="behavior-modal-head d-flex align-items-center justify-content-between">
+          <strong>Excluir perfil</strong>
+          <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" @click="closeProfileDeleteConfirm">
+            <i class="far fa-times"></i>
+          </button>
+        </div>
+        <div class="behavior-modal-body">
+          <p class="mb-3">Excluir o perfil <strong>{{ profileDeleteConfirm.name }}</strong>? Esta acao nao pode ser desfeita.</p>
+          <div class="d-flex gap-2 justify-content-end">
+            <button type="button" class="btn btn-sm btn-outline-secondary" @click="closeProfileDeleteConfirm">Cancelar</button>
+            <button type="button" class="btn btn-sm btn-danger" @click="confirmDeleteProfile">Excluir</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="shortcutsModalOpen" class="behavior-modal-backdrop" @click.self="closeShortcutsModal">
+      <div class="behavior-modal behavior-modal--narrow">
+        <div class="behavior-modal-head d-flex align-items-center justify-content-between">
+          <strong>Atalhos</strong>
+          <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" @click="closeShortcutsModal">
+            <i class="far fa-times"></i>
+          </button>
+        </div>
+        <div class="behavior-modal-body">
+          <ul class="small mb-0 ps-3">
+            <li class="mb-2"><kbd>Esc</kbd> Fecha o menu de contexto da tabela ou da arvore, se estiver aberto; caso contrario,
+              sobe um nivel no caminho (breadcrumb), quando ha JSON carregado.</li>
+            <li class="mb-2"><kbd>Esc</kbd> Tambem fecha este painel de atalhos ou o dialogo de exclusao de perfil.</li>
+            <li class="mb-0">Com o foco em campos de texto, <kbd>textarea</kbd> ou <kbd>select</kbd>, o <kbd>Esc</kbd> nao navega
+              (comportamento padrao de edicao).</li>
+          </ul>
         </div>
       </div>
     </div>

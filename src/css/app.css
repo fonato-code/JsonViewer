@@ -30,6 +30,22 @@ body.theme-dark {
   --sidebar-head-footer: rgba(3, 7, 16, 0.97);
 }
 
+/*
+ * Placeholders no modo escuro: o app usa body.theme-dark, mas o Bootstrap só ajusta
+ * --bs-secondary-color com [data-bs-theme]. Garante legibilidade em qualquer campo.
+ */
+html[data-bs-theme="dark"] input::placeholder,
+html[data-bs-theme="dark"] textarea::placeholder,
+html[data-bs-theme="dark"] .form-control::placeholder,
+html[data-bs-theme="dark"] .form-control-plaintext::placeholder,
+body.theme-dark input::placeholder,
+body.theme-dark textarea::placeholder,
+body.theme-dark .form-control::placeholder,
+body.theme-dark .form-control-plaintext::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.92;
+}
+
 html {
   height: 100%;
 }
@@ -208,11 +224,6 @@ body.theme-dark .input-sidebar-panel .input-sidebar-textarea {
   min-height: 0 !important;
 }
 
-body.theme-dark .input-sidebar-textarea::placeholder {
-  color: var(--text-secondary);
-  opacity: 0.75;
-}
-
 body.theme-dark .input-sidebar-textarea:focus {
   background-color: #040a14 !important;
   color: var(--text-primary) !important;
@@ -370,11 +381,6 @@ body.theme-dark .rules-sidebar .form-select {
   border-color: var(--border-color);
 }
 
-body.theme-dark .rules-sidebar .form-control::placeholder {
-  color: var(--text-secondary);
-  opacity: 0.85;
-}
-
 body.theme-dark .rules-sidebar .form-control:focus,
 body.theme-dark .rules-sidebar .form-select:focus {
   background-color: var(--bg-surface-2);
@@ -403,6 +409,18 @@ body.theme-dark .rules-sidebar .input-group-text {
   border: 0;
   border-right: 1px solid var(--border-color);
   text-align: left;
+  color: var(--text-primary);
+}
+
+body.theme-dark .profile-chip-apply {
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  background: transparent;
+}
+
+body.theme-dark .profile-chip-apply:hover {
+  color: var(--text-primary);
+  background: var(--accent-soft);
 }
 
 .profile-chip-remove {
@@ -1163,6 +1181,10 @@ body.theme-light .row-context-menu {
   max-width: 92vw;
 }
 
+.behavior-modal--narrow {
+  width: min(22rem, calc(100vw - 2rem));
+}
+
 .behavior-modal-head {
   padding: 0.72rem 0.85rem;
   border-bottom: 1px solid var(--border-color);
@@ -1170,6 +1192,22 @@ body.theme-light .row-context-menu {
 
 .behavior-modal-body {
   padding: 0.85rem;
+}
+
+.behavior-modal .btn-link {
+  color: var(--text-secondary) !important;
+}
+
+.behavior-modal .btn-link:hover {
+  color: var(--text-primary) !important;
+}
+
+body.theme-dark .behavior-modal .btn-link {
+  color: color-mix(in srgb, var(--text-secondary) 92%, #ffffff) !important;
+}
+
+body.theme-dark .behavior-modal .btn-link:hover {
+  color: var(--text-primary) !important;
 }
 
 .behavior-map-frame {
@@ -1211,6 +1249,199 @@ body.theme-light .row-context-menu {
 body.theme-light .behavior-modal {
   background: linear-gradient(180deg, #ffffff 0%, #eef4ff 100%);
   box-shadow: 0 14px 34px rgba(20, 35, 70, 0.18);
+}
+
+.viewer-help-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  min-width: 1.75rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.viewer-tools-row .form-control,
+.viewer-tools-row .form-control:focus {
+  background-color: color-mix(in srgb, var(--bg-surface-2) 90%, transparent);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+body.theme-light .viewer-tools-row .form-control {
+  background-color: #fff;
+}
+
+.viewer-tools-row .input-group .btn-outline-primary {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-color));
+}
+
+.viewer-tools-row .input-group .btn-outline-primary:hover {
+  color: #fff;
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+body.theme-dark .viewer-tools-row .input-group .btn-outline-primary {
+  color: color-mix(in srgb, var(--text-primary) 88%, var(--accent));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-color));
+  background-color: color-mix(in srgb, var(--bg-surface-2) 70%, transparent);
+}
+
+body.theme-dark .viewer-tools-row .input-group .btn-outline-primary:hover {
+  color: var(--text-primary);
+  background-color: color-mix(in srgb, var(--accent) 35%, var(--bg-surface-2));
+  border-color: var(--accent);
+}
+
+.global-search-wrap {
+  position: relative;
+  z-index: 0;
+}
+
+.global-search-wrap:has(.global-search-results) {
+  z-index: 25;
+}
+
+.global-search-input {
+  position: relative;
+  z-index: 1;
+}
+
+.global-search-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.28rem);
+  z-index: 30;
+  max-height: min(14rem, 42vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.28rem;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid color-mix(in srgb, var(--border-color) 45%, var(--text-secondary));
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.22),
+    0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+body.theme-dark .global-search-results {
+  background: var(--bg-surface-2);
+  border-color: color-mix(in srgb, var(--text-secondary) 38%, var(--border-color));
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.55),
+    0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+body.theme-light .global-search-results {
+  box-shadow:
+    0 12px 28px rgba(20, 35, 70, 0.14),
+    0 0 0 1px color-mix(in srgb, var(--border-color) 80%, transparent);
+}
+
+.global-search-hit {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.42rem 0.45rem;
+  text-align: left;
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.global-search-hit + .global-search-hit {
+  margin-top: 0.12rem;
+}
+
+.global-search-hit:hover,
+.global-search-hit:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.global-search-hit:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.global-search-hit-path {
+  display: block;
+  font-size: 0.74rem;
+  font-family: Consolas, Monaco, ui-monospace, monospace;
+  color: color-mix(in srgb, var(--accent) 35%, var(--text-primary));
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  padding: 0.12rem 0.35rem;
+  border-radius: 6px;
+  margin-bottom: 0.2rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.theme-dark .global-search-hit-path {
+  color: color-mix(in srgb, #7ec8ff 40%, var(--text-primary));
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-surface));
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-color));
+}
+
+.global-search-hit-preview {
+  display: block;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rules-timeline-y-checks {
+  max-height: 9rem;
+  overflow: auto;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 65%, var(--text-secondary));
+  background: color-mix(in srgb, var(--bg-surface-2) 75%, transparent);
+}
+
+body.theme-dark .rules-timeline-y-checks {
+  border-color: color-mix(in srgb, var(--text-secondary) 35%, var(--border-color));
+  background: color-mix(in srgb, var(--bg-surface-2) 94%, var(--bg-surface));
+}
+
+.global-search-truncated-note {
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.45rem 0.15rem;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: color-mix(in srgb, #ca8a04 55%, var(--text-secondary));
+}
+
+body.theme-dark .global-search-truncated-note {
+  color: color-mix(in srgb, #fbbf24 52%, var(--text-secondary));
+  border-top-color: color-mix(in srgb, var(--text-secondary) 35%, var(--border-color));
+}
+
+body.theme-dark .stats-card {
+  border-color: color-mix(in srgb, var(--text-secondary) 22%, var(--border-color));
+  background: color-mix(in srgb, var(--bg-surface-2) 94%, var(--bg-surface));
+}
+
+.behavior-modal-body kbd {
+  display: inline-block;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.72rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-surface-2) 85%, transparent);
+  color: var(--text-primary);
 }
 
 .app-toast-wrap {

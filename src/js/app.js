@@ -91,7 +91,17 @@
         globalSettingsModalOpen: false,
         globalSettingsDraft: {
           googleMapsApiKey: ""
-        }
+        },
+        shortcutsModalOpen: false,
+        profileDeleteConfirm: {
+          open: false,
+          name: ""
+        },
+        gotoPathInput: "",
+        globalSearchInput: "",
+        globalSearchResults: [],
+        globalSearchTruncated: false,
+        _globalSearchTimer: null
       };
     },
     computed: {
@@ -950,6 +960,10 @@
       applyThemeClass() {
         document.body.classList.toggle("theme-dark", this.theme === "dark");
         document.body.classList.toggle("theme-light", this.theme === "light");
+        document.documentElement.setAttribute(
+          "data-bs-theme",
+          this.theme === "dark" ? "dark" : "light"
+        );
       },
       loadUiSessionPreferences() {
         try {
@@ -1009,6 +1023,10 @@
           this.userTreeExpandedPaths = {};
           this.inputPanelCollapsed = true;
           this.tableColumnWidths = {};
+          this.gotoPathInput = "";
+          this.globalSearchInput = "";
+          this.globalSearchResults = [];
+          this.globalSearchTruncated = false;
           const self = this;
           this.$nextTick(function () {
             if (self.showTableView && self.canUseTableView) {
@@ -1071,6 +1089,16 @@
         this.tableSortDir = "asc";
         this.tableColumnWidths = {};
         this.dismissRowContextMenu();
+        this.shortcutsModalOpen = false;
+        this.profileDeleteConfirm = { open: false, name: "" };
+        this.gotoPathInput = "";
+        this.globalSearchInput = "";
+        this.globalSearchResults = [];
+        this.globalSearchTruncated = false;
+        if (this._globalSearchTimer) {
+          clearTimeout(this._globalSearchTimer);
+          this._globalSearchTimer = null;
+        }
       },
       loadSample() {
         this.jsonText = JSON.stringify(
@@ -1613,6 +1641,23 @@
         if (!points.length) {
           return null;
         }
+        let anyFiniteY = false;
+        for (let pi = 0; pi < points.length; pi++) {
+          const pt = points[pi];
+          for (let yj = 0; yj < yProps.length; yj++) {
+            const v = pt[yProps[yj]];
+            if (v != null && isFinite(v)) {
+              anyFiniteY = true;
+              break;
+            }
+          }
+          if (anyFiniteY) {
+            break;
+          }
+        }
+        if (!anyFiniteY) {
+          return null;
+        }
         points.sort(function (a, b) {
           return a.t - b.t;
         });
@@ -1939,7 +1984,7 @@
           }
           const lineData = this.resolveTimelineChartData(behavior, rows);
           if (!lineData || !lineData.labels.length) {
-            this.showToast("Linha do Tempo sem datas ou series numericas validas para exibir.", "error");
+            this.showToast(this.explainTimelineChartFailure(behavior, rows), "error");
             return;
           }
           this.activeBehaviorModal = {
@@ -2609,11 +2654,284 @@
         this.behaviorRulesByClass = this.cloneJson(normalized.behaviors || {});
         this.retainOnlyCompatibleRules();
         this.retainOnlyCompatibleBehaviors();
+        this.showToast('Perfil "' + profileName + '" aplicado: regras e comportamentos carregados.');
       },
-      deleteProfile(profileName) {
-        this.savedProfiles = this.savedProfiles.filter((p) => p.name !== profileName);
+      requestDeleteProfile(profileName) {
+        if (!profileName) return;
+        this.profileDeleteConfirm = { open: true, name: profileName };
+      },
+      closeProfileDeleteConfirm() {
+        this.profileDeleteConfirm = { open: false, name: "" };
+      },
+      confirmDeleteProfile() {
+        const name = this.profileDeleteConfirm.name;
+        if (!name) {
+          this.closeProfileDeleteConfirm();
+          return;
+        }
+        this.savedProfiles = this.savedProfiles.filter((p) => p.name !== name);
         this.persistProfilesToStorage();
-        this.showToast('Perfil "' + profileName + '" removido.');
+        this.showToast('Perfil "' + name + '" removido.');
+        this.closeProfileDeleteConfirm();
+      },
+      openShortcutsModal() {
+        this.shortcutsModalOpen = true;
+      },
+      closeShortcutsModal() {
+        this.shortcutsModalOpen = false;
+      },
+      parseJsonPathToSegments(input) {
+        let s = String(input == null ? "" : input).trim();
+        if (!s || s === "$") {
+          return [];
+        }
+        if (s.charAt(0) === "$") {
+          s = s.slice(1).trim();
+          if (s.charAt(0) === ".") {
+            s = s.slice(1);
+          }
+        }
+        s = s.trim();
+        if (!s) {
+          return [];
+        }
+        const segments = [];
+        let i = 0;
+        const len = s.length;
+        while (i < len) {
+          const c = s.charAt(i);
+          if (c === "." || c === " " || c === "\t" || c === "\n") {
+            i++;
+            continue;
+          }
+          if (c === "[") {
+            i++;
+            if (i >= len) {
+              return null;
+            }
+            const q = s.charAt(i);
+            if (q === "'" || q === '"') {
+              i++;
+              let key = "";
+              let esc = false;
+              while (i < len) {
+                if (esc) {
+                  key += s.charAt(i);
+                  esc = false;
+                  i++;
+                  continue;
+                }
+                if (s.charAt(i) === "\\") {
+                  esc = true;
+                  i++;
+                  continue;
+                }
+                if (s.charAt(i) === q) {
+                  i++;
+                  break;
+                }
+                key += s.charAt(i);
+                i++;
+              }
+              while (i < len && s.charAt(i) !== "]") {
+                i++;
+              }
+              if (i < len && s.charAt(i) === "]") {
+                i++;
+              }
+              segments.push(key);
+              continue;
+            }
+            let idx = "";
+            while (i < len && /[0-9]/.test(s.charAt(i))) {
+              idx += s.charAt(i);
+              i++;
+            }
+            while (i < len && s.charAt(i) !== "]") {
+              i++;
+            }
+            if (i < len && s.charAt(i) === "]") {
+              i++;
+            }
+            if (idx === "") {
+              return null;
+            }
+            segments.push(idx);
+            continue;
+          }
+          if (/[a-zA-Z_$]/.test(c)) {
+            let ident = "";
+            while (i < len && /[a-zA-Z0-9_$]/.test(s.charAt(i))) {
+              ident += s.charAt(i);
+              i++;
+            }
+            segments.push(ident);
+            continue;
+          }
+          return null;
+        }
+        return segments;
+      },
+      goToJsonPathFromInput() {
+        if (this.rootDataView === null) {
+          this.showToast("Carregue um JSON primeiro.", "error");
+          return;
+        }
+        const raw = this.gotoPathInput;
+        const segments = this.parseJsonPathToSegments(raw);
+        if (segments === null) {
+          this.showToast("JSON Path invalido. Ex.: $.alerts[0] ou alerts.0.city", "error");
+          return;
+        }
+        if (this.nodeAtPath(segments) === undefined) {
+          this.showToast("Caminho nao encontrado no JSON atual.", "error");
+          return;
+        }
+        this.navigateToPath(segments);
+        this.showToast("Navegou para " + this.formatJsonPathForClipboard(segments));
+      },
+      scheduleGlobalSearch() {
+        const self = this;
+        if (this._globalSearchTimer) {
+          clearTimeout(this._globalSearchTimer);
+        }
+        this._globalSearchTimer = setTimeout(function () {
+          self.runGlobalJsonSearch();
+        }, 220);
+      },
+      runGlobalJsonSearch() {
+        this._globalSearchTimer = null;
+        const q = (this.globalSearchInput || "").trim().toLowerCase();
+        if (!q || this.rootDataView === null) {
+          this.globalSearchResults = [];
+          this.globalSearchTruncated = false;
+          return;
+        }
+        const maxResults = 100;
+        const maxDepth = 80;
+        const results = [];
+        let truncated = false;
+        const self = this;
+        const visit = function (value, path, depth) {
+          if (truncated) {
+            return;
+          }
+          if (depth > maxDepth) {
+            return;
+          }
+          if (Array.isArray(value)) {
+            for (let i = 0; i < value.length; i++) {
+              if (results.length >= maxResults) {
+                truncated = true;
+                return;
+              }
+              visit(value[i], path.concat(String(i)), depth + 1);
+            }
+            return;
+          }
+          if (value && typeof value === "object") {
+            const keys = Object.keys(value);
+            for (let j = 0; j < keys.length; j++) {
+              if (results.length >= maxResults) {
+                truncated = true;
+                return;
+              }
+              const k = keys[j];
+              const child = value[k];
+              const childPath = path.concat(k);
+              if (String(k).toLowerCase().indexOf(q) !== -1) {
+                results.push({
+                  path: childPath,
+                  preview: self.formatJsonSearchPreview(child)
+                });
+                if (results.length >= maxResults) {
+                  truncated = true;
+                  return;
+                }
+              }
+              visit(child, childPath, depth + 1);
+            }
+            return;
+          }
+          let snippet = "";
+          if (value === null) {
+            snippet = "null";
+          } else if (typeof value === "string") {
+            snippet = value;
+          } else {
+            snippet = String(value);
+          }
+          if (snippet.toLowerCase().indexOf(q) !== -1) {
+            results.push({
+              path: path,
+              preview: snippet.length > 120 ? snippet.slice(0, 117) + "..." : snippet
+            });
+          }
+        };
+        visit(this.rootDataView, [], 0);
+        this.globalSearchResults = results;
+        this.globalSearchTruncated = truncated;
+      },
+      formatJsonSearchPreview(val) {
+        if (val === null) return "null";
+        if (typeof val === "object") {
+          try {
+            const s = JSON.stringify(val);
+            return s.length > 120 ? s.slice(0, 117) + "..." : s;
+          } catch (e) {
+            return "[object]";
+          }
+        }
+        const s = String(val);
+        return s.length > 120 ? s.slice(0, 117) + "..." : s;
+      },
+      onGlobalSearchResultClick(entry) {
+        if (!entry || !entry.path) return;
+        if (this.nodeAtPath(entry.path) === undefined) {
+          this.showToast("Caminho nao encontrado.", "error");
+          return;
+        }
+        this.navigateToPath(entry.path.slice());
+        this.showToast("Navegou para " + this.formatJsonPathForClipboard(entry.path));
+      },
+      explainTimelineChartFailure(behavior, rows) {
+        const xProp = behavior.config.timelineXProperty;
+        let yProps = behavior.config.timelineYProperties || [];
+        yProps = Array.isArray(yProps) ? yProps.filter(Boolean) : [];
+        if (!xProp || !yProps.length) {
+          return "Linha do Tempo: configure eixo X (data) e pelo menos uma serie Y.";
+        }
+        let dateCount = 0;
+        let yAny = false;
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || typeof row !== "object" || Array.isArray(row)) {
+            continue;
+          }
+          const d = this.parseDateInput(row[xProp]);
+          if (!d) {
+            continue;
+          }
+          dateCount++;
+          for (let j = 0; j < yProps.length; j++) {
+            const n = Number(row[yProps[j]]);
+            if (isFinite(n)) {
+              yAny = true;
+              break;
+            }
+          }
+        }
+        if (dateCount === 0) {
+          return (
+            'Linha do Tempo: nenhuma data valida na coluna "' +
+            xProp +
+            '". Verifique formato ou tipo da propriedade.'
+          );
+        }
+        if (!yAny) {
+          return "Linha do Tempo: datas encontradas, mas nenhum valor numerico valido nas series Y selecionadas.";
+        }
+        return "Linha do Tempo sem dados validos para exibir.";
       },
       escapeNavigationIgnoredTarget(target) {
         if (!target || typeof target.closest !== "function") {
@@ -2632,6 +2950,16 @@
       },
       onGlobalEscapeKeydown(e) {
         if (e.key !== "Escape") {
+          return;
+        }
+        if (this.shortcutsModalOpen) {
+          this.closeShortcutsModal();
+          e.preventDefault();
+          return;
+        }
+        if (this.profileDeleteConfirm.open) {
+          this.closeProfileDeleteConfirm();
+          e.preventDefault();
           return;
         }
         if (this.escapeNavigationIgnoredTarget(e.target)) {
@@ -2689,6 +3017,9 @@
       this.dismissRowContextMenu();
       if (this._tableMeasureEl && this._tableMeasureEl.parentNode) {
         this._tableMeasureEl.parentNode.removeChild(this._tableMeasureEl);
+      }
+      if (this._globalSearchTimer) {
+        clearTimeout(this._globalSearchTimer);
       }
     }
   });
