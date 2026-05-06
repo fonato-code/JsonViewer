@@ -137,7 +137,21 @@
                     <option value="br-date">DD/MM/YYYY</option>
                     <option value="br-datetime">DD/MM/YYYY HH:mm:ss</option>
                     <option value="us-date">MM/DD/YYYY</option>
+                    <option value="br-datetime-ms">DD/MM/YYYY HH:mm:ss.fff</option>
+                    <option value="us-datetime-ms">MM/DD/YYYY HH:mm:ss.fff</option>
+                    <option value="iso-local-ms">YYYY-MM-DD HH:mm:ss.fff</option>
+                    <option value="iso-datetime-local">ISO Datetime (YYYY-MM-DDTHH:mm:ss)</option>
+                    <option value="iso-datetime-utc">ISO Datetime UTC (YYYY-MM-DDTHH:mm:ssZ)</option>
+                    <option value="serial-1900">Serial Date (01/01/1900)</option>
+                    <option value="compact-datetime">Compact Date (YYYYMMDDHHmmssfff)</option>
+                    <option value="epoch-seconds">Unix timestamp / Epoch time (01/01/1970)</option>
+                    <option value="manual">Manual</option>
                   </select>
+                  <div v-if="selectedRule.dateFormat === 'manual'" class="mt-2">
+                    <label class="small text-secondary mb-1 d-block">Mascara manual (C#)</label>
+                    <input type="text" class="form-control form-control-sm" v-model.trim="selectedRule.manualDateMask"
+                      placeholder="dd/MM/yyyy HH:mm:ss.fff" autocomplete="off">
+                  </div>
                 </div>
               </div>
             </div>
