@@ -393,6 +393,13 @@
           }
         }
         return Object.keys(w).length !== keys.length;
+      },
+      radixBaseSelectOptions() {
+        const list = [];
+        for (let b = 2; b <= 36; b++) {
+          list.push(b);
+        }
+        return list;
       }
     },
     watch: {
@@ -453,7 +460,14 @@
         return value == null ? value : JSON.parse(JSON.stringify(value));
       },
       defaultRule() {
-        return { enabled: false, displayType: "auto", dateFormat: "iso", manualDateMask: "" };
+        return {
+          enabled: false,
+          displayType: "auto",
+          dateFormat: "iso",
+          manualDateMask: "",
+          radixFrom: 10,
+          radixTo: 16
+        };
       },
       ensureRule(className, propertyName) {
         if (!className || !propertyName) {
@@ -466,8 +480,17 @@
           this.viewRules[className] = Object.assign({}, this.viewRules[className], {
             [propertyName]: this.defaultRule()
           });
-        } else if (typeof this.viewRules[className][propertyName].manualDateMask !== "string") {
-          this.viewRules[className][propertyName].manualDateMask = "";
+        } else {
+          const r = this.viewRules[className][propertyName];
+          if (typeof r.manualDateMask !== "string") {
+            r.manualDateMask = "";
+          }
+          if (r.radixFrom == null || r.radixFrom === "") {
+            r.radixFrom = 10;
+          }
+          if (r.radixTo == null || r.radixTo === "") {
+            r.radixTo = 16;
+          }
         }
         return this.viewRules[className][propertyName];
       },
@@ -816,6 +839,9 @@
         if (rule.displayType === "number") {
           const num = Number(value);
           return isFinite(num) ? String(num) : null;
+        }
+        if (rule.displayType === "radix-convert") {
+          return this.formatValueRadixConvert(value, rule);
         }
         if (rule.displayType === "link" || rule.displayType === "jwt" || rule.displayType === "data-uri") {
           if (value == null) return null;
@@ -1649,6 +1675,86 @@
         if (!rule) return;
         rule.displayType = nextType;
         rule.enabled = nextType !== "auto";
+        if (nextType === "radix-convert") {
+          const rf = Number(rule.radixFrom);
+          const rt = Number(rule.radixTo);
+          if (!Number.isFinite(rf) || rf < 2 || rf > 36) {
+            rule.radixFrom = 10;
+          }
+          if (!Number.isFinite(rt) || rt < 2 || rt > 36) {
+            rule.radixTo = 16;
+          }
+        }
+      },
+      normalizeRadixBase(b, fallback) {
+        const n = Number(b);
+        const fb = Number(fallback);
+        const def = Number.isFinite(fb) && fb >= 2 && fb <= 36 ? fb : 10;
+        if (!Number.isFinite(n) || n < 2 || n > 36) {
+          return def;
+        }
+        return Math.floor(n);
+      },
+      parseValueAsIntegerInBase(value, fromBase) {
+        const fb = this.normalizeRadixBase(fromBase, 10);
+        if (typeof value === "number" && Number.isFinite(value)) {
+          if (fb !== 10) {
+            return null;
+          }
+          const n = Math.trunc(value);
+          if (!Number.isFinite(n) || Math.abs(n) > Number.MAX_SAFE_INTEGER) {
+            return null;
+          }
+          return n;
+        }
+        const s = String(value).trim();
+        if (!s || /\s/.test(s)) {
+          return null;
+        }
+        if (fb === 10) {
+          const num = Number(s);
+          if (!Number.isFinite(num)) {
+            return null;
+          }
+          const n = Math.trunc(num);
+          if (Math.abs(n) > Number.MAX_SAFE_INTEGER) {
+            return null;
+          }
+          return n;
+        }
+        const t = s;
+        if (t === "-" || t === "+") {
+          return null;
+        }
+        const core = t[0] === "-" || t[0] === "+" ? t.slice(1) : t;
+        if (!core) {
+          return null;
+        }
+        const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz".slice(0, fb);
+        for (let i = 0; i < core.length; i++) {
+          const c = core[i].toLowerCase();
+          if (alphabet.indexOf(c) === -1) {
+            return null;
+          }
+        }
+        const parsed = parseInt(t, fb);
+        if (!Number.isFinite(parsed) || Math.abs(parsed) > Number.MAX_SAFE_INTEGER) {
+          return null;
+        }
+        return parsed;
+      },
+      formatValueRadixConvert(value, rule) {
+        const fromB = this.normalizeRadixBase(rule.radixFrom, 10);
+        const toB = this.normalizeRadixBase(rule.radixTo, 16);
+        const n = this.parseValueAsIntegerInBase(value, fromB);
+        if (n === null) {
+          return null;
+        }
+        try {
+          return n.toString(toB);
+        } catch (e) {
+          return null;
+        }
       },
       isArrayItemClass(className) {
         if (!className) return false;
@@ -2981,6 +3087,8 @@
             if (!rule.dateFormat) {
               rule.dateFormat = "iso";
             }
+            rule.radixFrom = this.normalizeRadixBase(rule.radixFrom, 10);
+            rule.radixTo = this.normalizeRadixBase(rule.radixTo, 16);
             if (typeof rule.enabled !== "boolean") {
               rule.enabled = rule.displayType && rule.displayType !== "auto";
             }

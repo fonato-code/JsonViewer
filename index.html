@@ -144,7 +144,18 @@
                   <option value="link">Link</option>
                   <option value="jwt">JWT decoded</option>
                   <option value="data-uri">Data URI</option>
+                  <option value="radix-convert">Converter base numerica</option>
                 </select>
+                <div v-if="selectedRule.displayType === 'radix-convert'" class="mb-0">
+                  <label class="small text-secondary mb-1 d-block">Base original</label>
+                  <select class="form-select form-select-sm mb-2" v-model.number="selectedRule.radixFrom">
+                    <option v-for="b in radixBaseSelectOptions" :key="'radix-from-' + b" :value="b">{{ b }}</option>
+                  </select>
+                  <label class="small text-secondary mb-1 d-block">Base destino</label>
+                  <select class="form-select form-select-sm" v-model.number="selectedRule.radixTo">
+                    <option v-for="b in radixBaseSelectOptions" :key="'radix-to-' + b" :value="b">{{ b }}</option>
+                  </select>
+                </div>
                 <div v-if="selectedRule.displayType === 'date'">
                   <label class="small text-secondary mb-1 d-block">Formato de data</label>
                   <select class="form-select form-select-sm" v-model="selectedRule.dateFormat">
