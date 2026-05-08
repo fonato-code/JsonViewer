@@ -2,27 +2,16 @@
   const PROFILE_STORAGE_KEY = "jsonViewer.classProfiles.v1";
   const GLOBAL_SETTINGS_KEY = "jsonViewer.globalSettings.v1";
   const UI_SESSION_KEY = "jsonViewer.uiSession.v1";
-  const DATA_URI_MAX_CHARS = 40 * 1024 * 1024;
-  const TREE_PREVIEW_STRING_MAX = 160;
-  const TREE_LINK_LABEL_MAX = 88;
-  const TREE_TITLE_ATTR_MAX = 12000;
-  const DATA_URI_MIME_EXT = {
-    "application/pdf": "pdf",
-    "image/png": "png",
-    "image/jpeg": "jpg",
-    "image/jpg": "jpg",
-    "image/gif": "gif",
-    "image/webp": "webp",
-    "image/svg+xml": "svg",
-    "image/bmp": "bmp",
-    "text/plain": "txt",
-    "text/html": "html",
-    "text/css": "css",
-    "application/json": "json",
-    "application/xml": "xml",
-    "application/zip": "zip",
-    "application/octet-stream": "bin"
-  };
+  const DateUtils = window.JsonViewerDateUtils;
+  const JwtUtils = window.JsonViewerJwtUtils;
+  const DataUriUtils = window.JsonViewerDataUriUtils;
+  const RadixUtils = window.JsonViewerRadixUtils;
+  const UrlUtils = window.JsonViewerUrlUtils;
+  const PathUtils = window.JsonViewerPathUtils;
+  const DATA_URI_MAX_CHARS = DataUriUtils.DATA_URI_MAX_CHARS;
+  const TREE_PREVIEW_STRING_MAX = PathUtils.TREE_PREVIEW_STRING_MAX;
+  const TREE_LINK_LABEL_MAX = PathUtils.TREE_LINK_LABEL_MAX;
+  const TREE_TITLE_ATTR_MAX = PathUtils.TREE_TITLE_ATTR_MAX;
 
   const app = Vue.createApp({
     components: {
@@ -444,20 +433,16 @@
         });
       },
       readableType(value) {
-        if (Array.isArray(value)) return "array";
-        if (value === null) return "null";
-        return typeof value;
+        return PathUtils.readableType(value);
       },
       isNumericSegment(segment) {
-        return typeof segment === "number" || /^[0-9]+$/.test(String(segment));
+        return PathUtils.isNumericSegment(segment);
       },
       normalizePath(path) {
-        return path
-          .map((segment) => (this.isNumericSegment(segment) ? "*" : String(segment)))
-          .join(".");
+        return PathUtils.normalizePath(path);
       },
       cloneJson(value) {
-        return value == null ? value : JSON.parse(JSON.stringify(value));
+        return PathUtils.cloneJson(value);
       },
       defaultRule() {
         return {
@@ -635,190 +620,25 @@
         return { className: className, propertyName: property };
       },
       parseDateInput(value) {
-        if (typeof value !== "string" && typeof value !== "number") {
-          return null;
-        }
-        const date = new Date(value);
-        return isNaN(date.getTime()) ? null : date;
+        return DateUtils.parseDateInput(value);
       },
       formatDateByMode(date, mode) {
-        const pad = function (v) {
-          return String(v).padStart(2, "0");
-        };
-        const yyyy = date.getFullYear();
-        const mm = pad(date.getMonth() + 1);
-        const dd = pad(date.getDate());
-        const hh = pad(date.getHours());
-        const mi = pad(date.getMinutes());
-        const ss = pad(date.getSeconds());
-        const fff = pad(date.getMilliseconds()).padStart(3, "0");
-        if (mode === "br-date") return dd + "/" + mm + "/" + yyyy;
-        if (mode === "br-datetime") return dd + "/" + mm + "/" + yyyy + " " + hh + ":" + mi + ":" + ss;
-        if (mode === "us-date") return mm + "/" + dd + "/" + yyyy;
-        if (mode === "br-datetime-ms") return dd + "/" + mm + "/" + yyyy + " " + hh + ":" + mi + ":" + ss + "." + fff;
-        if (mode === "us-datetime-ms") return mm + "/" + dd + "/" + yyyy + " " + hh + ":" + mi + ":" + ss + "." + fff;
-        if (mode === "iso-local-ms") return yyyy + "-" + mm + "-" + dd + " " + hh + ":" + mi + ":" + ss + "." + fff;
-        if (mode === "iso-datetime-local") return yyyy + "-" + mm + "-" + dd + "T" + hh + ":" + mi + ":" + ss;
-        if (mode === "iso-datetime-utc") return date.toISOString().replace(/\.\d{3}Z$/, "Z");
-        if (mode === "serial-1900") {
-          const base = new Date(1900, 0, 1);
-          const dayMs = 24 * 60 * 60 * 1000;
-          return String(Math.floor((date.getTime() - base.getTime()) / dayMs));
-        }
-        if (mode === "compact-datetime") return yyyy + mm + dd + hh + mi + ss + fff;
-        if (mode === "epoch-seconds") return String(Math.floor(date.getTime() / 1000));
-        return date.toISOString();
+        return DateUtils.formatDateByMode(date, mode);
       },
       getPtWeekdayName(date, shortName) {
-        const names = shortName
-          ? ["dom", "seg", "ter", "qua", "qui", "sex", "sab"]
-          : ["domingo", "segunda-feira", "terca-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sabado"];
-        return names[date.getDay()];
+        return DateUtils.getPtWeekdayName(date, shortName);
       },
       getPtMonthName(date, shortName) {
-        const names = shortName
-          ? ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
-          : ["janeiro", "fevereiro", "marco", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-        return names[date.getMonth()];
+        return DateUtils.getPtMonthName(date, shortName);
       },
       formatOffsetToken(date, token) {
-        const offsetMinutes = -date.getTimezoneOffset();
-        const sign = offsetMinutes >= 0 ? "+" : "-";
-        const abs = Math.abs(offsetMinutes);
-        const hh = String(Math.floor(abs / 60)).padStart(2, "0");
-        const mm = String(abs % 60).padStart(2, "0");
-        if (token === "z") {
-          return sign + String(Math.floor(abs / 60));
-        }
-        if (token === "zz") {
-          return sign + hh;
-        }
-        return sign + hh + ":" + mm;
+        return DateUtils.formatOffsetToken(date, token);
       },
       formatFractionToken(date, token) {
-        const milli = String(date.getMilliseconds()).padStart(3, "0");
-        const seven = (milli + "0000").slice(0, 7);
-        if (token[0] === "f") {
-          return seven.slice(0, token.length);
-        }
-        const raw = seven.slice(0, token.length);
-        return raw.replace(/0+$/, "");
+        return DateUtils.formatFractionToken(date, token);
       },
       formatDateWithCSharpMask(date, mask) {
-        if (!mask || !mask.trim()) {
-          return null;
-        }
-        const fmt = mask.trim();
-        const tokenRegex = /('(?:[^']|'')*'|"(?:[^"]|"")*"|\\.|dddd|ddd|dd|d|MMMM|MMM|MM|M|yyyyy|yyyy|yyy|yy|y|HH|H|hh|h|mm|m|ss|s|fffffff|ffffff|fffff|ffff|fff|ff|f|FFFFFFF|FFFFFF|FFFFF|FFFF|FFF|FF|F|tt|t|zzz|zz|z|K)/g;
-        const parts = fmt.split(tokenRegex).filter(function (p) {
-          return p != null && p !== "";
-        });
-        const pad = function (v, n) {
-          return String(v).padStart(n, "0");
-        };
-        let out = "";
-        for (let i = 0; i < parts.length; i++) {
-          const token = parts[i];
-          if (token[0] === "'" || token[0] === '"') {
-            out += token.slice(1, -1).replace(/''/g, "'").replace(/""/g, '"');
-            continue;
-          }
-          if (token[0] === "\\") {
-            out += token.slice(1);
-            continue;
-          }
-          switch (token) {
-            case "d":
-              out += String(date.getDate());
-              break;
-            case "dd":
-              out += pad(date.getDate(), 2);
-              break;
-            case "ddd":
-              out += this.getPtWeekdayName(date, true);
-              break;
-            case "dddd":
-              out += this.getPtWeekdayName(date, false);
-              break;
-            case "M":
-              out += String(date.getMonth() + 1);
-              break;
-            case "MM":
-              out += pad(date.getMonth() + 1, 2);
-              break;
-            case "MMM":
-              out += this.getPtMonthName(date, true);
-              break;
-            case "MMMM":
-              out += this.getPtMonthName(date, false);
-              break;
-            case "y":
-              out += String(date.getFullYear() % 100);
-              break;
-            case "yy":
-              out += pad(date.getFullYear() % 100, 2);
-              break;
-            case "yyy":
-              out += pad(date.getFullYear(), 3);
-              break;
-            case "yyyy":
-              out += pad(date.getFullYear(), 4);
-              break;
-            case "yyyyy":
-              out += pad(date.getFullYear(), 5);
-              break;
-            case "H":
-              out += String(date.getHours());
-              break;
-            case "HH":
-              out += pad(date.getHours(), 2);
-              break;
-            case "h": {
-              const h = date.getHours() % 12 || 12;
-              out += String(h);
-              break;
-            }
-            case "hh": {
-              const h = date.getHours() % 12 || 12;
-              out += pad(h, 2);
-              break;
-            }
-            case "m":
-              out += String(date.getMinutes());
-              break;
-            case "mm":
-              out += pad(date.getMinutes(), 2);
-              break;
-            case "s":
-              out += String(date.getSeconds());
-              break;
-            case "ss":
-              out += pad(date.getSeconds(), 2);
-              break;
-            case "t":
-              out += date.getHours() < 12 ? "A" : "P";
-              break;
-            case "tt":
-              out += date.getHours() < 12 ? "AM" : "PM";
-              break;
-            case "z":
-            case "zz":
-            case "zzz":
-              out += this.formatOffsetToken(date, token);
-              break;
-            case "K":
-              out += this.formatOffsetToken(date, "zzz");
-              break;
-            default:
-              if (/^[fF]{1,7}$/.test(token)) {
-                out += this.formatFractionToken(date, token);
-              } else {
-                out += token;
-              }
-              break;
-          }
-        }
-        return out;
+        return DateUtils.formatDateWithCSharpMask(date, mask);
       },
       formatByRule(value, ruleContext) {
         if (!ruleContext) return null;
@@ -851,42 +671,10 @@
         return null;
       },
       normalizeUrlHref(value) {
-        if (value == null) {
-          return "";
-        }
-        const s = String(value).trim();
-        if (!s) {
-          return "";
-        }
-        if (/^(https?|mailto):/i.test(s)) {
-          return s;
-        }
-        if (/^\/\//.test(s)) {
-          return "https:" + s;
-        }
-        if (/^www\./i.test(s)) {
-          return "https://" + s;
-        }
-        try {
-          return new URL(s).href;
-        } catch (e1) {
-          try {
-            return new URL("https://" + s).href;
-          } catch (e2) {
-            return "";
-          }
-        }
+        return UrlUtils.normalizeUrlHref(value);
       },
       truncateTreeString(s, maxLen) {
-        if (s == null) {
-          return "";
-        }
-        const t = String(s);
-        const n = typeof maxLen === "number" && maxLen > 4 ? maxLen : TREE_PREVIEW_STRING_MAX;
-        if (t.length <= n) {
-          return t;
-        }
-        return t.slice(0, n - 1) + "\u2026";
+        return PathUtils.truncateString(s, maxLen);
       },
       treeValueTooltipText(path, value) {
         if (value !== null && typeof value === "object") {
@@ -993,96 +781,25 @@
         return { kind: "external", href: href, label: label };
       },
       decodeJwtBase64UrlSegment(segment) {
-        if (segment == null || typeof segment !== "string" || !segment.length) {
-          throw new Error("empty");
-        }
-        if (!/^[A-Za-z0-9_-]+$/.test(segment)) {
-          throw new Error("invalid");
-        }
-        let b64 = segment.replace(/-/g, "+").replace(/_/g, "/");
-        const pad = b64.length % 4 ? 4 - (b64.length % 4) : 0;
-        b64 += "=".repeat(pad);
-        const binary = atob(b64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        return JwtUtils.decodeJwtBase64UrlSegment(segment);
       },
       isLikelyJwtTokenString(s) {
-        if (!s || typeof s !== "string") {
-          return false;
-        }
-        const t = s.trim();
-        const parts = t.split(".");
-        if (parts.length !== 3 || !parts[0] || !parts[1]) {
-          return false;
-        }
-        if (!parts.every(function (p) {
-          return p.length > 0 && /^[A-Za-z0-9_-]+$/.test(p);
-        })) {
-          return false;
-        }
-        try {
-          const headerJson = this.decodeJwtBase64UrlSegment(parts[0]);
-          const header = JSON.parse(headerJson);
-          return header && typeof header === "object" && (header.alg !== undefined || header.typ !== undefined);
-        } catch (e) {
-          return false;
-        }
+        return JwtUtils.isLikelyJwtTokenString(s);
       },
       isLikelyDataUri(s) {
-        if (!s || typeof s !== "string") {
-          return false;
-        }
-        const t = s.trim();
-        if (!/^data:/i.test(t)) {
-          return false;
-        }
-        const comma = t.indexOf(",");
-        if (comma <= 5) {
-          return false;
-        }
-        return true;
+        return DataUriUtils.isLikelyDataUri(s);
       },
       parseDataUriMime(dataUri) {
-        if (!dataUri || typeof dataUri !== "string") {
-          return "";
-        }
-        const m = dataUri.trim().match(/^data:([^;,]+)/i);
-        return m ? m[1].trim().split(";")[0].trim() : "";
+        return DataUriUtils.parseDataUriMime(dataUri);
       },
       guessDownloadFilenameFromMime(mime) {
-        const baseMime = (mime || "").split(";")[0].trim().toLowerCase();
-        if (DATA_URI_MIME_EXT[baseMime]) {
-          return "download." + DATA_URI_MIME_EXT[baseMime];
-        }
-        if (baseMime.indexOf("image/") === 0) {
-          const sub = baseMime.slice("image/".length).replace(/\+xml$/i, "");
-          const safe = sub.replace(/[^a-z0-9]/gi, "") || "img";
-          return "download." + safe;
-        }
-        return "download.bin";
+        return DataUriUtils.guessDownloadFilenameFromMime(mime);
       },
-      async blobFromDataUri(dataUri) {
-        const res = await fetch(dataUri);
-        if (!res.ok) {
-          throw new Error("fetch failed");
-        }
-        return res.blob();
+      blobFromDataUri(dataUri) {
+        return DataUriUtils.blobFromDataUri(dataUri);
       },
       triggerBlobDownload(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename || "download.bin";
-        a.rel = "noopener";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(function () {
-          URL.revokeObjectURL(url);
-        }, 2500);
+        return DataUriUtils.triggerBlobDownload(blob, filename);
       },
       async openDataUriFromValue(dataUri) {
         const s = dataUri != null ? String(dataUri).trim() : "";
@@ -1687,74 +1404,13 @@
         }
       },
       normalizeRadixBase(b, fallback) {
-        const n = Number(b);
-        const fb = Number(fallback);
-        const def = Number.isFinite(fb) && fb >= 2 && fb <= 36 ? fb : 10;
-        if (!Number.isFinite(n) || n < 2 || n > 36) {
-          return def;
-        }
-        return Math.floor(n);
+        return RadixUtils.normalizeRadixBase(b, fallback);
       },
       parseValueAsIntegerInBase(value, fromBase) {
-        const fb = this.normalizeRadixBase(fromBase, 10);
-        if (typeof value === "number" && Number.isFinite(value)) {
-          if (fb !== 10) {
-            return null;
-          }
-          const n = Math.trunc(value);
-          if (!Number.isFinite(n) || Math.abs(n) > Number.MAX_SAFE_INTEGER) {
-            return null;
-          }
-          return n;
-        }
-        const s = String(value).trim();
-        if (!s || /\s/.test(s)) {
-          return null;
-        }
-        if (fb === 10) {
-          const num = Number(s);
-          if (!Number.isFinite(num)) {
-            return null;
-          }
-          const n = Math.trunc(num);
-          if (Math.abs(n) > Number.MAX_SAFE_INTEGER) {
-            return null;
-          }
-          return n;
-        }
-        const t = s;
-        if (t === "-" || t === "+") {
-          return null;
-        }
-        const core = t[0] === "-" || t[0] === "+" ? t.slice(1) : t;
-        if (!core) {
-          return null;
-        }
-        const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz".slice(0, fb);
-        for (let i = 0; i < core.length; i++) {
-          const c = core[i].toLowerCase();
-          if (alphabet.indexOf(c) === -1) {
-            return null;
-          }
-        }
-        const parsed = parseInt(t, fb);
-        if (!Number.isFinite(parsed) || Math.abs(parsed) > Number.MAX_SAFE_INTEGER) {
-          return null;
-        }
-        return parsed;
+        return RadixUtils.parseValueAsIntegerInBase(value, fromBase);
       },
       formatValueRadixConvert(value, rule) {
-        const fromB = this.normalizeRadixBase(rule.radixFrom, 10);
-        const toB = this.normalizeRadixBase(rule.radixTo, 16);
-        const n = this.parseValueAsIntegerInBase(value, fromB);
-        if (n === null) {
-          return null;
-        }
-        try {
-          return n.toString(toB);
-        } catch (e) {
-          return null;
-        }
+        return RadixUtils.formatValueRadixConvert(value, rule);
       },
       isArrayItemClass(className) {
         if (!className) return false;
